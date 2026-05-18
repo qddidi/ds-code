@@ -1,2 +1,5 @@
 export { ToolRegistry } from './registry.js'
 export type { Tool, ToolResult, ToolParameters } from './types.js'
+export { readTool } from './read.js'
+export { writeTool } from './write.js'
+export { editTool } from './edit.js'

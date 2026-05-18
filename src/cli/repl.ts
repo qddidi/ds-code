@@ -3,8 +3,11 @@ import chalk from 'chalk'
 import { Agent } from '../core/agent.js'
 import { DeepSeekClient } from '../api/deepseek.js'
 import { ToolRegistry } from '../tools/registry.js'
+import { readTool } from '../tools/read.js'
+import { writeTool } from '../tools/write.js'
+import { editTool } from '../tools/edit.js'
 import { Spinner } from './spinner.js'
-import { renderMarkdown, renderToolCall, renderToolResult, renderWelcome, renderError } from './output.js'
+import { renderMarkdown, renderToolCall, renderToolResult, toolCallSpinnerText, isReadTool, ReadFileTracker, renderWelcome, renderError } from './output.js'
 import { parseInput } from './input.js'
 
 export interface ReplOptions {
@@ -15,15 +18,27 @@ export interface ReplOptions {
 }
 
 export async function startRepl(options: ReplOptions): Promise<void> {
-  const client = new DeepSeekClient({
+  const clientConfig: { apiKey: string; model?: string; baseUrl?: string } = {
     apiKey: options.apiKey,
-    model: options.model ?? 'deepseek-chat',
-    baseUrl: options.baseUrl,
-  })
+  }
+  if (options.model) clientConfig.model = options.model
+  if (options.baseUrl) clientConfig.baseUrl = options.baseUrl
+  const client = new DeepSeekClient(clientConfig)
+
+  const cwd = process.cwd()
+  const defaultSystemPrompt = `You are ds-code, an AI coding assistant running in the user's terminal.
+
+Working directory: ${cwd}
+
+You have tools to read, write, and edit files. When the user asks about the current project, use read_file to examine files like package.json, README.md, or source files to understand the project before answering. Always base your answers on actual file contents, not assumptions.`
 
   const registry = new ToolRegistry()
+  registry.register(readTool)
+  registry.register(writeTool)
+  registry.register(editTool)
+
   const agent = new Agent(client, registry, {
-    systemPrompt: options.systemPrompt ?? 'You are a helpful coding assistant.',
+    systemPrompt: options.systemPrompt ?? defaultSystemPrompt,
   })
 
   const spinner = new Spinner()
@@ -56,30 +71,53 @@ export async function startRepl(options: ReplOptions): Promise<void> {
     abortController = new AbortController()
     spinner.start()
 
+    const readTracker = new ReadFileTracker()
+    let currentToolArgs = ''
+
     try {
       const result = await agent.run(input.content, {
         onContent: (text) => {
           spinner.stop()
+          readTracker.reset()
           console.log('\n' + renderMarkdown(text))
         },
         onToolCall: (name, args) => {
           spinner.stop()
-          console.log(renderToolCall(name, args))
-          spinner.start('Running tool...')
+          currentToolArgs = args
+
+          if (isReadTool(name)) {
+            spinner.start(toolCallSpinnerText(name, args))
+          } else {
+            readTracker.reset()
+            console.log(renderToolCall(name, args))
+            spinner.start(toolCallSpinnerText(name, args))
+          }
         },
         onToolResult: (name, _result, isError) => {
           spinner.stop()
-          console.log(renderToolResult(name, isError))
-          spinner.start()
+
+          if (isReadTool(name)) {
+            if (!isError) {
+              const parsed = safeParseArgs(currentToolArgs)
+              readTracker.add(parsed?.file_path ?? name)
+              console.log(readTracker.render())
+            }
+            spinner.start()
+          } else {
+            console.log(renderToolResult(name, isError))
+            spinner.start()
+          }
         },
       })
 
       spinner.stop()
+      readTracker.reset()
       if (!result) {
         console.log(chalk.dim('(no response)'))
       }
     } catch (err) {
       spinner.stop()
+      readTracker.reset()
       console.log(renderError(err instanceof Error ? err.message : String(err)))
     } finally {
       abortController = null
@@ -104,6 +142,14 @@ export async function startRepl(options: ReplOptions): Promise<void> {
       rl.close()
     }
   })
+}
+
+function safeParseArgs(args: string): Record<string, string> | null {
+  try {
+    return JSON.parse(args)
+  } catch {
+    return null
+  }
 }
 
 function handleCommand(command: string, rl: readline.Interface): void {
