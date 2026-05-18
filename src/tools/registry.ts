@@ -29,7 +29,7 @@ export class ToolRegistry {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters as Record<string, unknown>,
+        parameters: tool.parameters as unknown as Record<string, unknown>,
       },
     }))
   }
