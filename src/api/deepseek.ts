@@ -22,6 +22,18 @@ const DEFAULT_CONFIG: DeepSeekClientConfig = {
   timeout: 60000,
 }
 
+export type DeepSeekModel = 'deepseek-chat' | 'deepseek-reasoner'
+
+export function normalizeModel(model: string): DeepSeekModel | null {
+  if (model === 'chat' || model === 'deepseek-chat') return 'deepseek-chat'
+  if (model === 'reasoner' || model === 'deepseek-reasoner') return 'deepseek-reasoner'
+  return null
+}
+
+export function supportsTools(model: string): boolean {
+  return normalizeModel(model) === 'deepseek-chat'
+}
+
 export interface StreamCallbacks {
   onContent?: (text: string) => void
   onToolCall?: (toolCall: ToolCall) => void
@@ -34,6 +46,24 @@ export class DeepSeekClient {
 
   constructor(config: Partial<DeepSeekClientConfig> & { apiKey: string }) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    const model = normalizeModel(this.config.model)
+    if (!model) {
+      throw new Error('Invalid model. Available models: deepseek-chat, deepseek-reasoner')
+    }
+    this.config.model = model
+  }
+
+  getModel(): DeepSeekModel {
+    return this.config.model as DeepSeekModel
+  }
+
+  setModel(modelName: string): DeepSeekModel {
+    const model = normalizeModel(modelName)
+    if (!model) {
+      throw new Error('Invalid model. Available models: deepseek-chat, deepseek-reasoner')
+    }
+    this.config.model = model
+    return model
   }
 
   async chat(
@@ -48,13 +78,13 @@ export class DeepSeekClient {
       stream: false,
     }
 
-    if (tools && tools.length > 0) {
+    if (supportsTools(this.config.model) && tools && tools.length > 0) {
       body.tools = tools
       body.tool_choice = 'auto'
     }
 
     const response = await this.fetch(body)
-    return response as ChatCompletionResponse
+    return normalizeReasonerResponse(response as ChatCompletionResponse)
   }
 
   async chatStream(
@@ -70,7 +100,7 @@ export class DeepSeekClient {
       stream: true,
     }
 
-    if (tools && tools.length > 0) {
+    if (supportsTools(this.config.model) && tools && tools.length > 0) {
       body.tools = tools
       body.tool_choice = 'auto'
     }
@@ -101,6 +131,10 @@ export class DeepSeekClient {
         if (delta?.content) {
           content += delta.content
           callbacks.onContent?.(delta.content)
+        }
+
+        if (delta?.reasoning_content) {
+          content += delta.reasoning_content
         }
 
         if (delta?.tool_calls) {
@@ -192,4 +226,13 @@ export class DeepSeekClient {
 
     return response
   }
+}
+
+function normalizeReasonerResponse(response: ChatCompletionResponse): ChatCompletionResponse {
+  for (const choice of response.choices) {
+    if (choice.message.reasoning_content && !choice.message.content) {
+      choice.message.content = choice.message.reasoning_content
+    }
+  }
+  return response
 }

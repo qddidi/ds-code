@@ -1,6 +1,7 @@
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | null
+  reasoning_content?: string | null
   tool_calls?: ToolCall[]
   tool_call_id?: string
 }
@@ -56,6 +57,7 @@ export interface ChatCompletionResponse {
 export interface StreamDelta {
   role?: 'assistant'
   content?: string | null
+  reasoning_content?: string | null
   tool_calls?: StreamToolCallDelta[]
 }
 
