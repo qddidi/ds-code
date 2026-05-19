@@ -42,7 +42,7 @@ describe('config loader', () => {
   it('lets project config override global config', async () => {
     await mkdir(join(homeDir, '.ds-code'), { recursive: true })
     await mkdir(join(projectDir, '.ds-code'), { recursive: true })
-    await writeFile(join(homeDir, '.ds-code', 'config.json'), JSON.stringify({ model: 'deepseek-chat', temperature: 0.1 }))
+    await writeFile(join(homeDir, '.ds-code', 'config.json'), JSON.stringify({ model: 'deepseek-v4-pro', temperature: 0.1 }))
     await writeFile(join(projectDir, '.ds-code', 'settings.json'), JSON.stringify({ model: 'deepseek-reasoner' }))
 
     const config = await loadConfig({ homeDir, projectDir })

@@ -2,7 +2,7 @@ import type { DsCodeConfig } from './schema.js'
 
 export const DEFAULT_CONFIG: DsCodeConfig = {
   baseUrl: 'https://api.deepseek.com',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-pro',
   maxTokens: 4096,
   temperature: 0.2,
   timeout: 120_000,

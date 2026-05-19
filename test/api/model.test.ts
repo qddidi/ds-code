@@ -40,10 +40,10 @@ describe('model support', () => {
     globalThis.fetch = originalFetch
   })
 
-  it('uses deepseek-chat by default', () => {
+  it('uses deepseek-v4-pro by default', () => {
     const client = new DeepSeekClient({ apiKey: 'sk-test' })
 
-    expect(client.getModel()).toBe('deepseek-chat')
+    expect(client.getModel()).toBe('deepseek-v4-pro')
   })
 
   it('switches model from command aliases', () => {
@@ -53,7 +53,8 @@ describe('model support', () => {
 
     expect(model).toBe('deepseek-reasoner')
     expect(client.getModel()).toBe('deepseek-reasoner')
-    expect(modelCommand('/model chat')).toBe('deepseek-chat')
+    expect(modelCommand('/model pro')).toBe('deepseek-v4-pro')
+    expect(modelCommand('/model flash')).toBe('deepseek-v4-flash')
   })
 
   it('extracts reasoning_content into content when needed', async () => {
@@ -64,6 +65,27 @@ describe('model support', () => {
 
     expect(response.choices[0]?.message.reasoning_content).toBe('reasoned answer')
     expect(response.choices[0]?.message.content).toBe('reasoned answer')
+  })
+
+  it('sends tools for v4 pro and flash models', async () => {
+    const fetchMock = mockFetchResponse(REASONER_RESPONSE)
+    globalThis.fetch = fetchMock
+    const client = new DeepSeekClient({ apiKey: 'sk-test', model: 'flash' })
+
+    await client.chat([{ role: 'user', content: 'hi' }], [{
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read file',
+        parameters: { type: 'object', properties: {} },
+      },
+    }])
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body)
+    expect(body.model).toBe('deepseek-v4-flash')
+    expect(body.tools).toBeDefined()
+    expect(supportsTools('deepseek-v4-pro')).toBe(true)
+    expect(supportsTools('deepseek-v4-flash')).toBe(true)
   })
 
   it('does not send tools for reasoner model', async () => {

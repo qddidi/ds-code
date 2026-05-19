@@ -113,7 +113,7 @@ describe('DeepSeekClient', () => {
       expect(options.headers['Content-Type']).toBe('application/json')
 
       const body = JSON.parse(options.body)
-      expect(body.model).toBe('deepseek-chat')
+      expect(body.model).toBe('deepseek-v4-pro')
       expect(body.messages).toEqual([{ role: 'user', content: 'Hi' }])
       expect(body.stream).toBe(false)
     })

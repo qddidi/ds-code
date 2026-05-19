@@ -16,22 +16,26 @@ import { parseSSEStream } from './stream.js'
 const DEFAULT_CONFIG: DeepSeekClientConfig = {
   baseUrl: 'https://api.deepseek.com',
   apiKey: '',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-pro',
   maxTokens: 8192,
   temperature: 0,
   timeout: 60000,
 }
 
-export type DeepSeekModel = 'deepseek-chat' | 'deepseek-reasoner'
+export type DeepSeekModel = 'deepseek-v4-pro' | 'deepseek-v4-flash' | 'deepseek-reasoner'
+
+const AVAILABLE_MODELS = 'deepseek-v4-pro, deepseek-v4-flash, deepseek-reasoner'
 
 export function normalizeModel(model: string): DeepSeekModel | null {
-  if (model === 'chat' || model === 'deepseek-chat') return 'deepseek-chat'
+  if (model === 'pro' || model === 'chat' || model === 'deepseek-chat' || model === 'deepseek-v4-pro') return 'deepseek-v4-pro'
+  if (model === 'flash' || model === 'deepseek-v4-flash') return 'deepseek-v4-flash'
   if (model === 'reasoner' || model === 'deepseek-reasoner') return 'deepseek-reasoner'
   return null
 }
 
 export function supportsTools(model: string): boolean {
-  return normalizeModel(model) === 'deepseek-chat'
+  const normalized = normalizeModel(model)
+  return normalized === 'deepseek-v4-pro' || normalized === 'deepseek-v4-flash'
 }
 
 export interface StreamCallbacks {
@@ -48,7 +52,7 @@ export class DeepSeekClient {
     this.config = { ...DEFAULT_CONFIG, ...config }
     const model = normalizeModel(this.config.model)
     if (!model) {
-      throw new Error('Invalid model. Available models: deepseek-chat, deepseek-reasoner')
+      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS}`)
     }
     this.config.model = model
   }
@@ -60,7 +64,7 @@ export class DeepSeekClient {
   setModel(modelName: string): DeepSeekModel {
     const model = normalizeModel(modelName)
     if (!model) {
-      throw new Error('Invalid model. Available models: deepseek-chat, deepseek-reasoner')
+      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS}`)
     }
     this.config.model = model
     return model
