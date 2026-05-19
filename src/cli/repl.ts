@@ -11,8 +11,12 @@ import { grepTool } from '../tools/grep.js'
 import { listDirTool } from '../tools/list-dir.js'
 import { bashTool } from '../tools/bash.js'
 import { Spinner } from './spinner.js'
-import { renderMarkdown, renderToolCall, renderToolResult, toolCallSpinnerText, isReadTool, ReadFileTracker, renderWelcome, renderError } from './output.js'
+import { renderMarkdown, renderToolCall, renderToolResult, toolCallSpinnerText, isReadTool, ReadFileTracker, renderWelcome, renderError, renderThinking, renderAfterTool } from './output.js'
 import { parseInput } from './input.js'
+import { modelCommand } from './model.js'
+import { NAME, VERSION } from '../index.js'
+import { SLASH_COMMANDS } from './commands.js'
+import { openSlashDropdown } from './slash-dropdown.js'
 
 export interface ReplOptions {
   apiKey: string
@@ -61,6 +65,25 @@ You have tools to read, write, edit, list, search files, and execute shell comma
   rl.prompt()
 
   let abortController: AbortController | null = null
+  let slashDropdownOpen = false
+
+  readline.emitKeypressEvents(process.stdin, rl)
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true)
+  }
+
+  process.stdin.on('keypress', async (str) => {
+    if (slashDropdownOpen || str !== '/' || (rl.line !== '' && rl.line !== '/')) return
+    slashDropdownOpen = true
+    rl.pause()
+    const selection = await openSlashDropdown('/')
+    rl.resume()
+    slashDropdownOpen = false
+    if (selection.command) {
+      handleCommand(selection.command, rl, registry, client)
+    }
+    rl.prompt()
+  })
 
   rl.on('line', async (line) => {
     const input = parseInput(line)
@@ -70,14 +93,25 @@ You have tools to read, write, edit, list, search files, and execute shell comma
       return
     }
 
+    if (input.type === 'command' && input.content === '/') {
+      if (!slashDropdownOpen) {
+        const selection = await openSlashDropdown('/')
+        if (selection.command) {
+          handleCommand(selection.command, rl, registry, client)
+        }
+      }
+      rl.prompt()
+      return
+    }
+
     if (input.type === 'command') {
-      handleCommand(input.content, rl)
+      handleCommand(input.content, rl, registry, client)
       rl.prompt()
       return
     }
 
     abortController = new AbortController()
-    spinner.start()
+    spinner.start(renderThinking())
 
     const readTracker = new ReadFileTracker()
     let currentToolArgs = ''
@@ -103,6 +137,7 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         },
         onToolResult: (name, _result, isError) => {
           spinner.stop()
+          const nextStep = renderAfterTool(name, isError)
 
           if (isReadTool(name)) {
             if (!isError) {
@@ -110,10 +145,10 @@ You have tools to read, write, edit, list, search files, and execute shell comma
               readTracker.add(parsed?.file_path ?? name)
               console.log(readTracker.render())
             }
-            spinner.start()
+            spinner.start(nextStep)
           } else {
             console.log(renderToolResult(name, isError))
-            spinner.start()
+            spinner.start(nextStep)
           }
         },
       })
@@ -160,7 +195,7 @@ function safeParseArgs(args: string): Record<string, string> | null {
   }
 }
 
-function handleCommand(command: string, rl: readline.Interface): void {
+function handleCommand(command: string, rl: readline.Interface, registry: ToolRegistry, client: DeepSeekClient): void {
   const cmd = command.split(' ')[0]
 
   switch (cmd) {
@@ -168,9 +203,7 @@ function handleCommand(command: string, rl: readline.Interface): void {
       console.log([
         '',
         chalk.bold('Commands:'),
-        '  /help     Show this help',
-        '  /clear    Clear conversation history',
-        '  /exit     Exit the program',
+        ...SLASH_COMMANDS.map((command) => `  ${command.name.padEnd(8)} ${command.description}`),
         '',
       ].join('\n'))
       break
@@ -179,6 +212,37 @@ function handleCommand(command: string, rl: readline.Interface): void {
       break
     case '/clear':
       console.log(chalk.dim('Conversation cleared.'))
+      break
+    case '/model':
+      console.log(chalk.dim(modelCommand(command)))
+      break
+    case '/status':
+      console.log(chalk.dim(`Working directory: ${process.cwd()}`))
+      console.log(chalk.dim(`Model: ${client.getModel()}`))
+      break
+    case '/tools':
+      console.log([
+        '',
+        chalk.bold('Tools:'),
+        ...registry.list().map((tool) => `  ${tool.name.padEnd(12)} ${tool.description}`),
+        '',
+      ].join('\n'))
+      break
+    case '/memory':
+      console.log(chalk.dim('Memory is not implemented in ds-code yet.'))
+      break
+    case '/compact':
+      console.log(chalk.dim('Context compaction is not wired into the REPL yet.'))
+      break
+    case '/cost':
+      console.log(chalk.dim('Cost tracking is not implemented yet.'))
+      break
+    case '/doctor':
+      console.log(chalk.dim(`Node.js ${process.version}`))
+      console.log(chalk.dim(`API key: ${process.env.DEEPSEEK_API_KEY ? 'set' : 'missing'}`))
+      break
+    case '/version':
+      console.log(`${NAME} v${VERSION}`)
       break
     default:
       console.log(chalk.yellow(`Unknown command: ${cmd}`))

@@ -15,7 +15,7 @@
     }
   },
   "scripts": {
-    "dev": "tsx src/index.ts",
+    "dev": "tsx bin/ds-code.ts",
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",

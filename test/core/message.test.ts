@@ -38,6 +38,11 @@ describe('message builders', () => {
     expect(msg.tool_calls).toEqual(toolCalls)
   })
 
+  it('creates assistant message with reasoning content', () => {
+    const msg = assistantMessage(null, undefined, '思考内容')
+    expect(msg).toEqual({ role: 'assistant', content: null, reasoning_content: '思考内容' })
+  })
+
   it('creates tool result message with tool_call_id', () => {
     const msg = toolResultMessage('call_1', 'file content here')
     expect(msg).toEqual({
@@ -55,7 +60,7 @@ describe('serializeMessages', () => {
       userMessage('hi'),
       assistantMessage(null, [
         { id: 'c1', type: 'function', function: { name: 'read', arguments: '{}' } },
-      ]),
+      ], '需要读取文件'),
       toolResultMessage('c1', 'result'),
       assistantMessage('done'),
     ]
@@ -67,6 +72,7 @@ describe('serializeMessages', () => {
     expect(serialized[2]!.role).toBe('assistant')
     expect(serialized[2]!.content).toBeNull()
     expect(serialized[2]!.tool_calls).toHaveLength(1)
+    expect(serialized[2]!.reasoning_content).toBe('需要读取文件')
     expect(serialized[3]!.tool_call_id).toBe('c1')
     expect(serialized[4]).toEqual({ role: 'assistant', content: 'done' })
   })

@@ -16,7 +16,7 @@ function textResponse(content: string): ChatCompletionResponse {
   }
 }
 
-function toolCallResponse(calls: { name: string; args: string; id?: string }[]): ChatCompletionResponse {
+function toolCallResponse(calls: { name: string; args: string; id?: string }[], reasoningContent?: string): ChatCompletionResponse {
   return {
     id: 'resp-2',
     object: 'chat.completion',
@@ -27,6 +27,7 @@ function toolCallResponse(calls: { name: string; args: string; id?: string }[]):
       message: {
         role: 'assistant',
         content: null,
+        ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
         tool_calls: calls.map((c, i) => ({
           id: c.id ?? `call_${i}`,
           type: 'function' as const,
@@ -113,6 +114,21 @@ describe('Agent', () => {
     const messages = agent.getMessages()
     const toolMsg = messages.find((m) => m.role === 'tool')
     expect(toolMsg?.content).toBe('echo: ping')
+  })
+
+  it('preserves reasoning content on tool-call assistant messages', async () => {
+    const client = createMockClient([
+      toolCallResponse([{ name: 'echo', args: '{"text":"ping"}', id: 'c1' }], '需要先查看工具结果'),
+      textResponse('Done'),
+    ])
+    const registry = new ToolRegistry()
+    registry.register(createEchoTool())
+    const agent = new Agent(client, registry)
+
+    await agent.run('echo ping')
+
+    const assistantToolMsg = agent.getMessages().find((m) => m.role === 'assistant' && m.tool_calls)
+    expect(assistantToolMsg?.reasoning_content).toBe('需要先查看工具结果')
   })
 
   it('handles consecutive tool calls (2 rounds)', async () => {

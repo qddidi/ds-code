@@ -62,7 +62,7 @@ export class Agent {
       const msg = choice.message
 
       this.messages.push(
-        assistantMessage(msg.content, msg.tool_calls),
+        assistantMessage(msg.content, msg.tool_calls, msg.reasoning_content),
       )
 
       if (!msg.tool_calls || msg.tool_calls.length === 0) {

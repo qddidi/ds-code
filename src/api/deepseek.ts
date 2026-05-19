@@ -222,7 +222,7 @@ export class DeepSeekClient {
         throw new RateLimitError(retryAfter ? parseInt(retryAfter, 10) : null)
       }
       throw new ApiError(
-        `API request failed with status ${response.status}`,
+        `API request failed with status ${response.status}${responseBody ? `: ${responseBody}` : ''}`,
         response.status,
         responseBody,
       )

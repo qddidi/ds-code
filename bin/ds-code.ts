@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { VERSION, NAME } from '../src/index.js'
+import { NAME, VERSION } from '../src/index.js'
+import { startRepl } from '../src/cli/index.js'
 
 const args = process.argv.slice(2)
 
@@ -20,13 +21,30 @@ Usage:
 Options:
   -v, --version    Show version
   -h, --help       Show help
-  --model <model>  Model to use (deepseek-chat, deepseek-reasoner)
+  --model <model>  Model to use (deepseek-v4-pro, deepseek-v4-flash, deepseek-reasoner)
 
 Examples:
   ds-code                     Start interactive session
   ds-code "fix the bug"       Start with initial prompt
-  ds-code --model reasoner    Use DeepSeek R1 model`)
+  ds-code --model reasoner    Use DeepSeek reasoner model`)
   process.exit(0)
 }
 
-console.log(`${NAME} v${VERSION} — starting...`)
+const apiKey = process.env.DEEPSEEK_API_KEY
+if (!apiKey) {
+  console.error('Missing DEEPSEEK_API_KEY environment variable.')
+  process.exit(1)
+}
+
+const model = readOption('--model')
+
+await startRepl({
+  apiKey,
+  ...(model ? { model } : {}),
+})
+
+function readOption(name: string): string | undefined {
+  const index = args.indexOf(name)
+  if (index === -1) return undefined
+  return args[index + 1]
+}

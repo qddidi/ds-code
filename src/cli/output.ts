@@ -14,6 +14,17 @@ export function renderMarkdown(text: string): string {
   return text
 }
 
+export function renderThinking(): string {
+  return '正在分析你的请求...'
+}
+
+export function renderAfterTool(name: string, isError: boolean): string {
+  if (isError) {
+    return `${toolActionName(name)} 遇到问题，正在调整下一步...`
+  }
+  return `${toolActionName(name)} 已完成，正在继续整理结果...`
+}
+
 export function renderToolCall(name: string, args: string): string {
   const summary = toolCallSummary(name, args)
   return `${chalk.dim('┌')} ${chalk.yellow('⚡')} ${summary}`
@@ -23,13 +34,21 @@ export function toolCallSpinnerText(name: string, args: string): string {
   const parsed = safeParse(args)
   switch (name) {
     case 'read_file':
-      return `Reading ${basename(parsed?.file_path ?? 'file')}...`
+      return `正在读取 ${basename(parsed?.file_path ?? 'file')}...`
     case 'write_file':
-      return `Writing ${basename(parsed?.file_path ?? 'file')}...`
+      return `正在写入 ${basename(parsed?.file_path ?? 'file')}...`
     case 'edit_file':
-      return `Editing ${basename(parsed?.file_path ?? 'file')}...`
+      return `正在编辑 ${basename(parsed?.file_path ?? 'file')}...`
+    case 'list_dir':
+      return `正在查看 ${parsed?.path ?? '.'}...`
+    case 'glob':
+      return `正在查找 ${parsed?.pattern ?? '*'}...`
+    case 'grep':
+      return `正在搜索 ${parsed?.pattern ?? ''}...`
+    case 'bash':
+      return '正在执行命令...'
     default:
-      return 'Running tool...'
+      return '正在使用工具...'
   }
 }
 
@@ -46,12 +65,14 @@ function toolCallSummary(name: string, args: string): string {
       return `${chalk.bold('Write')} ${chalk.cyan(parsed?.file_path ?? 'file')}`
     case 'edit_file':
       return `${chalk.bold('Edit')} ${chalk.cyan(parsed?.file_path ?? 'file')}`
-    case 'list_directory':
+    case 'list_dir':
       return `${chalk.bold('List')} ${chalk.cyan(parsed?.path ?? '.')}`
     case 'glob':
       return `${chalk.bold('Glob')} ${chalk.cyan(parsed?.pattern ?? '*')}`
     case 'grep':
       return `${chalk.bold('Grep')} ${chalk.cyan(parsed?.pattern ?? '')}`
+    case 'bash':
+      return `${chalk.bold('Bash')} ${chalk.cyan(truncate(parsed?.command ?? '', 60))}`
     default:
       return `${chalk.bold(name)} ${chalk.dim(truncate(args, 60))}`
   }
@@ -81,6 +102,27 @@ export function renderWelcome(version: string): string {
 
 export function renderError(message: string): string {
   return `${chalk.red('Error:')} ${message}`
+}
+
+function toolActionName(name: string): string {
+  switch (name) {
+    case 'read_file':
+      return '读取文件'
+    case 'write_file':
+      return '写入文件'
+    case 'edit_file':
+      return '编辑文件'
+    case 'list_dir':
+      return '查看目录'
+    case 'glob':
+      return '查找文件'
+    case 'grep':
+      return '搜索内容'
+    case 'bash':
+      return '执行命令'
+    default:
+      return `工具 ${name}`
+  }
 }
 
 function truncate(str: string, max: number): string {
