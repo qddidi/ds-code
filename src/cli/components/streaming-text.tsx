@@ -1,10 +1,14 @@
 import React from 'react'
-import { Text } from 'ink'
+import { Box, Text } from 'ink'
 
 interface StreamingTextProps {
   text: string
 }
 
 export function StreamingText({ text }: StreamingTextProps): React.ReactElement {
-  return <Text>{text}</Text>
+  return (
+    <Box flexDirection="column">
+      <Text>{text}<Text color="cyan">▊</Text></Text>
+    </Box>
+  )
 }

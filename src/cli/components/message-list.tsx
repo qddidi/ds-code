@@ -1,31 +1,40 @@
 import React from 'react'
-import { Box, Text } from 'ink'
+import { Box, Text, Static } from 'ink'
+import { renderMarkdown } from '../output.js'
+
+interface DisplayMessage {
+  id: string
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+}
 
 interface MessageListProps {
-  messages: Array<{ role: 'user' | 'assistant' | 'tool'; content: string }>
+  messages: DisplayMessage[]
 }
 
 export function MessageList({ messages }: MessageListProps): React.ReactElement | null {
   if (messages.length === 0) return null
 
   return (
-    <Box flexDirection="column">
-      {messages.map((msg, i) => (
-        <Box key={i} flexDirection="column" marginBottom={1}>
+    <Static items={messages}>
+      {(msg) => (
+        <Box key={msg.id} flexDirection="column" marginBottom={0}>
           {msg.role === 'user' && (
-            <Text>
-              <Text bold color="green">You: </Text>
+            <Box>
+              <Text bold color="green">{`❯ `}</Text>
               <Text>{msg.content}</Text>
-            </Text>
+            </Box>
           )}
           {msg.role === 'assistant' && (
-            <Text>{msg.content}</Text>
+            <Text>{renderMarkdown(msg.content)}</Text>
           )}
           {msg.role === 'tool' && (
             <Text dimColor>{msg.content}</Text>
           )}
         </Box>
-      ))}
-    </Box>
+      )}
+    </Static>
   )
 }
+
+export type { DisplayMessage }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Box, Text, useInput, useApp } from 'ink'
 import TextInput from 'ink-text-input'
-import { MessageList } from './components/message-list.js'
+import { MessageList, type DisplayMessage } from './components/message-list.js'
 import { StreamingText } from './components/streaming-text.js'
 import { StatusIndicator } from './components/status-indicator.js'
 import { ToolCallDisplay } from './components/tool-call.js'
@@ -20,7 +20,6 @@ import { bashTool } from '../tools/bash.js'
 import { PermissionManager } from '../permissions/manager.js'
 import { SessionStore, type SessionData } from '../core/session.js'
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
-import { renderMarkdown } from './output.js'
 import { NAME, VERSION } from '../index.js'
 
 export interface AppProps {
@@ -32,18 +31,25 @@ export interface AppProps {
   resume?: boolean
 }
 
-interface DisplayMessage {
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-}
-
 interface PermissionReq {
   tool: string
   args: Record<string, unknown>
   resolve: (answer: 'yes' | 'always' | 'no') => void
 }
 
+interface ToolEntry {
+  name: string
+  args: Record<string, unknown>
+  done: boolean
+  error: boolean
+}
+
 type Status = 'idle' | 'thinking' | 'streaming' | 'tool'
+
+let msgId = 0
+function nextId(): string {
+  return String(++msgId)
+}
 
 export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
@@ -51,7 +57,8 @@ export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resum
   const [messages, setMessages] = useState<DisplayMessage[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const [streamingText, setStreamingText] = useState('')
-  const [currentTool, setCurrentTool] = useState<{ name: string; args: Record<string, unknown> } | null>(null)
+  const [currentTool, setCurrentTool] = useState<ToolEntry | null>(null)
+  const [toolHistory, setToolHistory] = useState<ToolEntry[]>([])
   const [permReq, setPermReq] = useState<PermissionReq | null>(null)
   const [inputValue, setInputValue] = useState('')
   const [matches, setMatches] = useState<SlashCommand[]>([])
@@ -233,9 +240,10 @@ You have tools to read, write, edit, list, search files, and execute shell comma
     const agent = agentRef.current
     if (!agent) return
 
-    setMessages((prev) => [...prev, { role: 'user', content: input }])
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: input }])
     setStatus('thinking')
     setStreamingText('')
+    setToolHistory([])
     bufferRef.current = ''
 
     const controller = new AbortController()
@@ -262,21 +270,28 @@ You have tools to read, write, edit, list, search files, and execute shell comma
             setStatus('tool')
             let parsed: Record<string, unknown> = {}
             try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
-            setCurrentTool({ name, args: parsed })
+            const entry: ToolEntry = { name, args: parsed, done: false, error: false }
+            setCurrentTool(entry)
           },
-          onToolResult: () => {
-            setCurrentTool(null)
+          onToolResult: (_name, _result, isError) => {
+            setCurrentTool((prev) => {
+              if (prev) {
+                const completed = { ...prev, done: true, error: isError ?? false }
+                setToolHistory((h) => [...h, completed])
+              }
+              return null
+            })
             setStatus('thinking')
           },
           onMaxIterations: () => {
-            setMessages((prev) => [...prev, { role: 'tool', content: 'Reached maximum iterations.' }])
+            setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: 'Reached maximum iterations.' }])
           },
         },
         controller.signal,
       )
 
       if (bufferRef.current) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: renderMarkdown(bufferRef.current) }])
+        setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
       }
 
       const session = sessionRef.current
@@ -285,7 +300,7 @@ You have tools to read, write, edit, list, search files, and execute shell comma
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        setMessages((prev) => [...prev, { role: 'tool', content: `Error: ${err instanceof Error ? err.message : String(err)}` }])
+        setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `Error: ${err instanceof Error ? err.message : String(err)}` }])
       }
     } finally {
       if (flushRef.current) {
@@ -334,11 +349,19 @@ You have tools to read, write, edit, list, search files, and execute shell comma
 
   return (
     <Box flexDirection="column">
-      <Text bold color="cyan">{NAME} v{VERSION}</Text>
+      <Text bold color="cyan">{NAME} <Text dimColor>v{VERSION}</Text></Text>
       <Text dimColor>Type your message, /help for commands, Ctrl+D to exit</Text>
       <Text> </Text>
 
       <MessageList messages={messages} />
+
+      {toolHistory.length > 0 && (
+        <Box flexDirection="column" marginBottom={0}>
+          {toolHistory.map((t, i) => (
+            <ToolCallDisplay key={i} name={t.name} args={t.args} done error={t.error} />
+          ))}
+        </Box>
+      )}
 
       {status === 'thinking' && <StatusIndicator />}
       {status === 'tool' && currentTool && <ToolCallDisplay name={currentTool.name} args={currentTool.args} />}
@@ -359,7 +382,7 @@ You have tools to read, write, edit, list, search files, and execute shell comma
       )}
 
       <Box>
-        <Text color="blue">{multiline ? '... ' : '> '}</Text>
+        <Text color="blue">{multiline ? '... ' : '❯ '}</Text>
         <TextInput
           value={inputValue}
           onChange={handleInputChange}
