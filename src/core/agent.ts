@@ -61,6 +61,30 @@ export class Agent {
     }
   }
 
+  resetMessages(): void {
+    this.messages = [systemMessage(this.config.systemPrompt)]
+    this.contextManager = new ContextManager({
+      maxTokens: this.config.maxContextTokens,
+    })
+    this.contextManager.addMessage(this.messages[0]!)
+  }
+
+  async compressNow(): Promise<boolean> {
+    if (this.messages.length <= 2) return false
+    await this.contextManager.compress(async (msgs) => {
+      const summaryResponse = await this.client.chatStream(
+        [
+          systemMessage('Summarize the following conversation concisely, preserving key decisions, file paths, and context needed to continue the work.'),
+          userMessage(msgs.map((m) => `[${m.role}]: ${m.content ?? ''}`).join('\n')),
+        ],
+        {},
+      )
+      return summaryResponse.content ?? ''
+    })
+    this.messages = this.contextManager.getMessages()
+    return true
+  }
+
   async run(input: string, callbacks: AgentCallbacks = {}, signal?: AbortSignal): Promise<string> {
     const userMsg = userMessage(input)
     this.messages.push(userMsg)

@@ -21,6 +21,7 @@ import { PermissionManager } from '../permissions/manager.js'
 import { SessionStore, type SessionData } from '../core/session.js'
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
 import { NAME, VERSION } from '../index.js'
+import { estimateMessagesTokens } from '../utils/token-count.js'
 
 export interface AppProps {
   apiKey: string
@@ -69,6 +70,8 @@ export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resum
   const [commandOutput, setCommandOutput] = useState('')
 
   const agentRef = React.useRef<Agent | null>(null)
+  const clientRef = React.useRef<DeepSeekClient | null>(null)
+  const registryRef = React.useRef<ToolRegistry | null>(null)
   const abortRef = React.useRef<AbortController | null>(null)
   const bufferRef = React.useRef('')
   const flushRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
@@ -135,6 +138,8 @@ You have tools to read, write, edit, list, search files, and execute shell comma
 
       sessionRef.current = session
       agentRef.current = agent
+      clientRef.current = client
+      registryRef.current = registry
       setReady(true)
 
       if (initialPrompt) {
@@ -326,16 +331,111 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         break
       case '/clear':
         setMessages([])
+        setToolHistory([])
+        agentRef.current?.resetMessages()
         setCommandOutput('Conversation cleared.')
         break
-      case '/status':
-        setCommandOutput(`Working directory: ${process.cwd()}\nSession: ${sessionRef.current?.id ?? 'none'}`)
+      case '/exit':
+        exit()
+        break
+      case '/model':
+        if (parts[1]) {
+          try {
+            const newModel = clientRef.current?.setModel(parts[1])
+            setCommandOutput(`Switched to: ${newModel}`)
+          } catch (err) {
+            setCommandOutput(err instanceof Error ? err.message : String(err))
+          }
+        } else {
+          setCommandOutput(`Current model: ${clientRef.current?.getModel() ?? 'unknown'}`)
+        }
+        break
+      case '/status': {
+        const msgs = agentRef.current?.getMessages() ?? []
+        const tokens = estimateMessagesTokens(msgs)
+        const toolCount = registryRef.current?.list().length ?? 0
+        setCommandOutput([
+          `Model: ${clientRef.current?.getModel() ?? 'unknown'}`,
+          `Working directory: ${process.cwd()}`,
+          `Session: ${sessionRef.current?.id ?? 'none'}`,
+          `Messages: ${msgs.length}`,
+          `Estimated tokens: ${tokens}`,
+          `Tools: ${toolCount}`,
+        ].join('\n'))
+        break
+      }
+      case '/tools': {
+        const tools = registryRef.current?.list() ?? []
+        if (tools.length === 0) {
+          setCommandOutput('No tools registered.')
+        } else {
+          setCommandOutput(
+            tools.map((t) => `  ${t.name.padEnd(14)} ${t.description.slice(0, 60)}`).join('\n')
+          )
+        }
+        break
+      }
+      case '/cost': {
+        const msgs = agentRef.current?.getMessages() ?? []
+        const tokens = estimateMessagesTokens(msgs)
+        setCommandOutput(`Session tokens (estimated): ${tokens}`)
+        break
+      }
+      case '/doctor': {
+        const checks = [
+          `Node:      ${process.version}`,
+          `Platform:  ${process.platform} ${process.arch}`,
+          `API Key:   ${apiKey ? '✓ set' : '✗ missing'}`,
+          `Model:     ${clientRef.current?.getModel() ?? 'unknown'}`,
+          `CWD:       ${process.cwd()}`,
+          `Session:   ${sessionRef.current?.id ?? 'none'}`,
+        ]
+        setCommandOutput(checks.join('\n'))
+        break
+      }
+      case '/memory': {
+        const sysMsg = agentRef.current?.getMessages().find((m) => m.role === 'system')
+        const content = sysMsg?.content ?? 'No system prompt'
+        const preview = content.length > 200 ? content.slice(0, 200) + '...' : content
+        setCommandOutput(`System prompt:\n${preview}`)
+        break
+      }
+      case '/compact':
+        handleCompact()
+        break
+      case '/resume':
+        handleResume()
         break
       case '/version':
         setCommandOutput(`${NAME} v${VERSION}`)
         break
       default:
         setCommandOutput(`Unknown command: ${cmd}`)
+    }
+  }
+
+  const handleCompact = async (): Promise<void> => {
+    const agent = agentRef.current
+    if (!agent) return
+    setCommandOutput('Compressing context...')
+    const compressed = await agent.compressNow()
+    if (compressed) {
+      const tokens = estimateMessagesTokens(agent.getMessages())
+      setCommandOutput(`Context compressed. Tokens now: ${tokens}`)
+    } else {
+      setCommandOutput('Not enough context to compress.')
+    }
+  }
+
+  const handleResume = async (): Promise<void> => {
+    const session = await sessionStoreRef.current.resumeLatest()
+    if (session) {
+      agentRef.current?.loadMessages(session.messages)
+      sessionRef.current = session
+      setMessages([])
+      setCommandOutput(`Resumed session: ${session.id} (${session.messages.length} messages)`)
+    } else {
+      setCommandOutput('No previous session found.')
     }
   }
 

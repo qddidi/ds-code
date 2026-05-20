@@ -1,5 +1,3 @@
-import chalk from 'chalk'
-
 export interface SlashCommand {
   name: string
   description: string
@@ -25,25 +23,4 @@ export function matchSlashCommands(input: string): SlashCommand[] {
   if (!input.startsWith('/')) return []
   const commandPart = input.split(/\s+/)[0] ?? input
   return SLASH_COMMANDS.filter((command) => command.name.startsWith(commandPart))
-}
-
-export function clampSelection(index: number, count: number): number {
-  if (count === 0) return 0
-  if (index < 0) return count - 1
-  if (index >= count) return 0
-  return index
-}
-
-export function renderSlashCommandSuggestions(matches: SlashCommand[], selectedIndex = 0): string {
-  if (matches.length === 0) {
-    return chalk.dim('  没有匹配的 ds-code 命令')
-  }
-
-  const selected = clampSelection(selectedIndex, matches.length)
-  return matches
-    .map((command, index) => {
-      const marker = index === selected ? chalk.cyan('›') : ' '
-      return `  ${marker} ${chalk.bold(command.name)} ${chalk.dim(command.description)}`
-    })
-    .join('\n')
 }
