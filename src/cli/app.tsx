@@ -8,7 +8,7 @@ import { ToolCallDisplay } from './components/tool-call.js'
 import { PermissionPrompt } from './components/permission-prompt.js'
 import { Autocomplete } from './components/autocomplete.js'
 import { Agent } from '../core/agent.js'
-import { DeepSeekClient } from '../api/deepseek.js'
+import { DeepSeekClient, AVAILABLE_MODELS, type DeepSeekModel } from '../api/deepseek.js'
 import { ToolRegistry } from '../tools/registry.js'
 import { readTool } from '../tools/read.js'
 import { writeTool } from '../tools/write.js'
@@ -68,6 +68,8 @@ export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resum
   const [multilineBuffer, setMultilineBuffer] = useState<string[]>([])
   const [ready, setReady] = useState(false)
   const [commandOutput, setCommandOutput] = useState('')
+  const [modelPicker, setModelPicker] = useState(false)
+  const [modelPickerIdx, setModelPickerIdx] = useState(0)
 
   const agentRef = React.useRef<Agent | null>(null)
   const clientRef = React.useRef<DeepSeekClient | null>(null)
@@ -173,6 +175,38 @@ You have tools to read, write, edit, list, search files, and execute shell comma
       return
     }
 
+    // Model picker navigation
+    if (modelPicker) {
+      if (key.upArrow) {
+        setModelPickerIdx((prev) => (prev - 1 + AVAILABLE_MODELS.length) % AVAILABLE_MODELS.length)
+        return
+      }
+      if (key.downArrow) {
+        setModelPickerIdx((prev) => (prev + 1) % AVAILABLE_MODELS.length)
+        return
+      }
+      if (key.return || key.tab) {
+        const selected = AVAILABLE_MODELS[modelPickerIdx]
+        if (selected) {
+          try {
+            clientRef.current?.setModel(selected)
+            setCommandOutput(`Switched to: ${selected}`)
+          } catch (err) {
+            setCommandOutput(err instanceof Error ? err.message : String(err))
+          }
+        }
+        setModelPicker(false)
+        setModelPickerIdx(0)
+        return
+      }
+      if (key.escape) {
+        setModelPicker(false)
+        setModelPickerIdx(0)
+        return
+      }
+      return
+    }
+
     // Autocomplete navigation
     if (matches.length > 0) {
       if (key.upArrow) {
@@ -183,13 +217,18 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         setMatchIdx((prev) => (prev + 1) % matches.length)
         return
       }
-      if (key.tab) {
+      if (key.tab || key.return) {
         const selected = matches[matchIdx]
         if (selected) {
-          setInputValue(selected.name)
+          setInputValue(selected.name + ' ')
           setMatches([])
           setMatchIdx(0)
         }
+        return
+      }
+      if (key.escape) {
+        setMatches([])
+        setMatchIdx(0)
         return
       }
     }
@@ -210,6 +249,8 @@ You have tools to read, write, edit, list, search files, and execute shell comma
   }
 
   const handleSubmit = async (text: string): Promise<void> => {
+    if (matches.length > 0 || modelPicker) return
+
     setMatches([])
     setMatchIdx(0)
     setInputValue('')
@@ -347,7 +388,10 @@ You have tools to read, write, edit, list, search files, and execute shell comma
             setCommandOutput(err instanceof Error ? err.message : String(err))
           }
         } else {
-          setCommandOutput(`Current model: ${clientRef.current?.getModel() ?? 'unknown'}`)
+          const current = clientRef.current?.getModel() ?? 'unknown'
+          setCommandOutput(`Current model: ${current}`)
+          setModelPickerIdx(AVAILABLE_MODELS.indexOf(current as DeepSeekModel))
+          setModelPicker(true)
         }
         break
       case '/status': {
@@ -477,7 +521,26 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         </Box>
       )}
 
-      {matches.length > 0 && (
+      {modelPicker && (
+        <Box flexDirection="column" marginBottom={0}>
+          <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingLeft={1} paddingRight={1}>
+            {AVAILABLE_MODELS.map((m, i) => {
+              const isSelected = i === modelPickerIdx
+              const isCurrent = m === clientRef.current?.getModel()
+              return (
+                <Box key={m}>
+                  <Text color={isSelected ? 'cyan' : 'gray'}>{isSelected ? '❯' : ' '} </Text>
+                  <Text color={isSelected ? 'cyan' : 'white'} bold={isSelected}>{m}</Text>
+                  {isCurrent && <Text color="green"> (current)</Text>}
+                </Box>
+              )
+            })}
+          </Box>
+          <Text dimColor>  ↑↓ navigate  ⏎ select  Esc cancel</Text>
+        </Box>
+      )}
+
+      {matches.length > 0 && !modelPicker && (
         <Autocomplete matches={matches} selectedIndex={matchIdx} />
       )}
 
@@ -487,7 +550,7 @@ You have tools to read, write, edit, list, search files, and execute shell comma
           value={inputValue}
           onChange={handleInputChange}
           onSubmit={handleSubmit}
-          focus={status === 'idle' && !permReq}
+          focus={status === 'idle' && !permReq && !modelPicker}
         />
       </Box>
     </Box>

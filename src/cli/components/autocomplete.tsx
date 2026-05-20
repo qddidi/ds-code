@@ -9,16 +9,20 @@ interface AutocompleteProps {
 
 export function Autocomplete({ matches, selectedIndex }: AutocompleteProps): React.ReactElement {
   return (
-    <Box flexDirection="column" marginLeft={2}>
-      {matches.map((cmd, i) => (
-        <Box key={cmd.name}>
-          <Text color={i === selectedIndex ? 'cyan' : undefined}>
-            {i === selectedIndex ? '› ' : '  '}
-          </Text>
-          <Text bold={i === selectedIndex}>{cmd.name}</Text>
-          <Text dimColor> {cmd.description}</Text>
-        </Box>
-      ))}
+    <Box flexDirection="column" marginBottom={0}>
+      <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingLeft={1} paddingRight={1}>
+        {matches.map((cmd, i) => {
+          const isSelected = i === selectedIndex
+          return (
+            <Box key={cmd.name}>
+              <Text color={isSelected ? 'cyan' : 'gray'}>{isSelected ? '❯' : ' '} </Text>
+              <Text color={isSelected ? 'cyan' : 'white'} bold={isSelected}>{cmd.name.padEnd(10)}</Text>
+              <Text color="gray"> {cmd.description}</Text>
+            </Box>
+          )
+        })}
+      </Box>
+      <Text dimColor>  ↑↓ navigate  ⏎/Tab select  Esc dismiss</Text>
     </Box>
   )
 }

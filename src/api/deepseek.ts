@@ -25,7 +25,7 @@ const DEFAULT_CONFIG: DeepSeekClientConfig = {
 
 export type DeepSeekModel = 'deepseek-v4-pro' | 'deepseek-v4-flash' | 'deepseek-reasoner'
 
-const AVAILABLE_MODELS = 'deepseek-v4-pro, deepseek-v4-flash, deepseek-reasoner'
+export const AVAILABLE_MODELS: DeepSeekModel[] = ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-reasoner']
 
 export function normalizeModel(model: string): DeepSeekModel | null {
   if (model === 'pro' || model === 'chat' || model === 'deepseek-chat' || model === 'deepseek-v4-pro') return 'deepseek-v4-pro'
@@ -54,7 +54,7 @@ export class DeepSeekClient {
     this.config = { ...DEFAULT_CONFIG, ...config }
     const model = normalizeModel(this.config.model)
     if (!model) {
-      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS}`)
+      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}`)
     }
     this.config.model = model
   }
@@ -66,7 +66,7 @@ export class DeepSeekClient {
   setModel(modelName: string): DeepSeekModel {
     const model = normalizeModel(modelName)
     if (!model) {
-      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS}`)
+      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}`)
     }
     this.config.model = model
     return model
