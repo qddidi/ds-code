@@ -3,6 +3,7 @@ import chalk from 'chalk'
 export interface SlashCommand {
   name: string
   description: string
+  aliases?: string[]
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [

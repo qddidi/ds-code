@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import React from 'react'
+import { render } from 'ink'
 import { NAME, VERSION } from '../src/index.js'
-import { startRepl } from '../src/cli/index.js'
+import { App } from '../src/cli/app.js'
 
 const args = process.argv.slice(2)
 
@@ -48,12 +50,14 @@ const positionalArgs = args.filter((arg, i) => {
 })
 const initialPrompt = positionalArgs.length > 0 ? positionalArgs.join(' ') : undefined
 
-await startRepl({
-  apiKey,
-  ...(model ? { model } : {}),
-  ...(initialPrompt ? { initialPrompt } : {}),
-  resume,
-})
+render(
+  React.createElement(App, {
+    apiKey,
+    ...(model ? { model } : {}),
+    ...(initialPrompt ? { initialPrompt } : {}),
+    resume,
+  })
+)
 
 function readOption(name: string): string | undefined {
   const index = args.indexOf(name)

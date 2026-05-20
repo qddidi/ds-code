@@ -44,7 +44,7 @@ export class Agent {
     this.contextManager = new ContextManager({
       maxTokens: this.config.maxContextTokens,
     })
-    this.contextManager.addMessage(this.messages[0])
+    this.contextManager.addMessage(this.messages[0]!)
   }
 
   getMessages(): ChatMessage[] {

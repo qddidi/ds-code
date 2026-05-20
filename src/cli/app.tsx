@@ -1,0 +1,372 @@
+import React, { useState } from 'react'
+import { Box, Text, useInput, useApp } from 'ink'
+import TextInput from 'ink-text-input'
+import { MessageList } from './components/message-list.js'
+import { StreamingText } from './components/streaming-text.js'
+import { StatusIndicator } from './components/status-indicator.js'
+import { ToolCallDisplay } from './components/tool-call.js'
+import { PermissionPrompt } from './components/permission-prompt.js'
+import { Autocomplete } from './components/autocomplete.js'
+import { Agent } from '../core/agent.js'
+import { DeepSeekClient } from '../api/deepseek.js'
+import { ToolRegistry } from '../tools/registry.js'
+import { readTool } from '../tools/read.js'
+import { writeTool } from '../tools/write.js'
+import { editTool } from '../tools/edit.js'
+import { globTool } from '../tools/glob.js'
+import { grepTool } from '../tools/grep.js'
+import { listDirTool } from '../tools/list-dir.js'
+import { bashTool } from '../tools/bash.js'
+import { PermissionManager } from '../permissions/manager.js'
+import { SessionStore, type SessionData } from '../core/session.js'
+import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
+import { renderMarkdown } from './output.js'
+import { NAME, VERSION } from '../index.js'
+
+export interface AppProps {
+  apiKey: string
+  model?: string
+  baseUrl?: string
+  systemPrompt?: string
+  initialPrompt?: string
+  resume?: boolean
+}
+
+interface DisplayMessage {
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+}
+
+interface PermissionReq {
+  tool: string
+  args: Record<string, unknown>
+  resolve: (answer: 'yes' | 'always' | 'no') => void
+}
+
+type Status = 'idle' | 'thinking' | 'streaming' | 'tool'
+
+export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+  const { exit } = useApp()
+
+  const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const [status, setStatus] = useState<Status>('idle')
+  const [streamingText, setStreamingText] = useState('')
+  const [currentTool, setCurrentTool] = useState<{ name: string; args: Record<string, unknown> } | null>(null)
+  const [permReq, setPermReq] = useState<PermissionReq | null>(null)
+  const [inputValue, setInputValue] = useState('')
+  const [matches, setMatches] = useState<SlashCommand[]>([])
+  const [matchIdx, setMatchIdx] = useState(0)
+  const [multiline, setMultiline] = useState(false)
+  const [multilineBuffer, setMultilineBuffer] = useState<string[]>([])
+  const [ready, setReady] = useState(false)
+  const [commandOutput, setCommandOutput] = useState('')
+
+  const agentRef = React.useRef<Agent | null>(null)
+  const abortRef = React.useRef<AbortController | null>(null)
+  const bufferRef = React.useRef('')
+  const flushRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+  const sessionRef = React.useRef<SessionData | null>(null)
+  const sessionStoreRef = React.useRef(new SessionStore())
+
+  React.useEffect(() => {
+    const init = async (): Promise<void> => {
+      const clientConfig: { apiKey: string; model?: string; baseUrl?: string } = { apiKey }
+      if (model) clientConfig.model = model
+      if (baseUrl) clientConfig.baseUrl = baseUrl
+      const client = new DeepSeekClient(clientConfig)
+
+      const cwd = process.cwd()
+      const defaultPrompt = `You are ds-code, an AI coding assistant running in the user's terminal.
+
+Working directory: ${cwd}
+
+You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.`
+
+      const registry = new ToolRegistry()
+      registry.register(readTool)
+      registry.register(writeTool)
+      registry.register(editTool)
+      registry.register(globTool)
+      registry.register(grepTool)
+      registry.register(listDirTool)
+      registry.register(bashTool)
+
+      const permissionManager = new PermissionManager({
+        confirm: async (request) => {
+          return new Promise((resolve) => {
+            setPermReq({
+              tool: request.toolName,
+              args: request.args,
+              resolve: (answer) => {
+                if (answer === 'yes') resolve('allow_once')
+                else if (answer === 'always') resolve('allow_always')
+                else resolve('deny')
+              },
+            })
+          })
+        },
+      })
+      registry.setPermissionManager(permissionManager)
+
+      const agent = new Agent(client, registry, {
+        systemPrompt: systemPrompt ?? defaultPrompt,
+      })
+
+      const store = sessionStoreRef.current
+      let session: SessionData
+      if (resume) {
+        const resumed = await store.resumeLatest()
+        if (resumed) {
+          session = resumed
+          agent.loadMessages(resumed.messages)
+        } else {
+          session = await store.create()
+        }
+      } else {
+        session = await store.create()
+      }
+
+      sessionRef.current = session
+      agentRef.current = agent
+      setReady(true)
+
+      if (initialPrompt) {
+        await runAgent(initialPrompt)
+      }
+    }
+    init().catch(() => {})
+  }, [])
+
+  useInput((input, key) => {
+    if (permReq) {
+      const k = input.toLowerCase()
+      if (k === 'y') { permReq.resolve('yes'); setPermReq(null) }
+      else if (k === 'a') { permReq.resolve('always'); setPermReq(null) }
+      else if (k === 'n') { permReq.resolve('no'); setPermReq(null) }
+      return
+    }
+
+    if (key.ctrl && input === 'c') {
+      if (abortRef.current) {
+        abortRef.current.abort()
+      } else if (multiline) {
+        setMultiline(false)
+        setMultilineBuffer([])
+      }
+      return
+    }
+
+    if (key.ctrl && input === 'd') {
+      exit()
+      return
+    }
+
+    // Autocomplete navigation
+    if (matches.length > 0) {
+      if (key.upArrow) {
+        setMatchIdx((prev) => (prev - 1 + matches.length) % matches.length)
+        return
+      }
+      if (key.downArrow) {
+        setMatchIdx((prev) => (prev + 1) % matches.length)
+        return
+      }
+      if (key.tab) {
+        const selected = matches[matchIdx]
+        if (selected) {
+          setInputValue(selected.name)
+          setMatches([])
+          setMatchIdx(0)
+        }
+        return
+      }
+    }
+  }, { isActive: true })
+
+  const handleInputChange = (value: string): void => {
+    setInputValue(value)
+    setCommandOutput('')
+
+    if (value.startsWith('/') && !value.includes(' ')) {
+      const m = matchSlashCommands(value)
+      setMatches(m)
+      setMatchIdx(0)
+    } else {
+      setMatches([])
+      setMatchIdx(0)
+    }
+  }
+
+  const handleSubmit = async (text: string): Promise<void> => {
+    setMatches([])
+    setMatchIdx(0)
+    setInputValue('')
+
+    if (multiline) {
+      if (text.trim() === '"""') {
+        setMultiline(false)
+        const full = multilineBuffer.join('\n')
+        setMultilineBuffer([])
+        if (full.trim()) await runAgent(full)
+      } else {
+        setMultilineBuffer((prev) => [...prev, text])
+      }
+      return
+    }
+
+    if (text.trim() === '"""') {
+      setMultiline(true)
+      return
+    }
+
+    if (!text.trim()) return
+
+    if (text.startsWith('/')) {
+      handleCommand(text)
+      return
+    }
+
+    await runAgent(text)
+  }
+
+  const runAgent = async (input: string): Promise<void> => {
+    const agent = agentRef.current
+    if (!agent) return
+
+    setMessages((prev) => [...prev, { role: 'user', content: input }])
+    setStatus('thinking')
+    setStreamingText('')
+    bufferRef.current = ''
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    flushRef.current = setInterval(() => {
+      if (bufferRef.current) {
+        setStreamingText(bufferRef.current)
+      }
+    }, 16)
+
+    try {
+      await agent.run(
+        input,
+        {
+          onContent: (chunk) => {
+            setStatus('streaming')
+            bufferRef.current += chunk
+          },
+          onThinking: () => {
+            setStatus('thinking')
+          },
+          onToolCall: (name, args) => {
+            setStatus('tool')
+            let parsed: Record<string, unknown> = {}
+            try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
+            setCurrentTool({ name, args: parsed })
+          },
+          onToolResult: () => {
+            setCurrentTool(null)
+            setStatus('thinking')
+          },
+          onMaxIterations: () => {
+            setMessages((prev) => [...prev, { role: 'tool', content: 'Reached maximum iterations.' }])
+          },
+        },
+        controller.signal,
+      )
+
+      if (bufferRef.current) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: renderMarkdown(bufferRef.current) }])
+      }
+
+      const session = sessionRef.current
+      if (session) {
+        await sessionStoreRef.current.autosave(session, agent.getMessages())
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        setMessages((prev) => [...prev, { role: 'tool', content: `Error: ${err instanceof Error ? err.message : String(err)}` }])
+      }
+    } finally {
+      if (flushRef.current) {
+        clearInterval(flushRef.current)
+        flushRef.current = null
+      }
+      abortRef.current = null
+      setStatus('idle')
+      setStreamingText('')
+      setCurrentTool(null)
+    }
+  }
+
+  const handleCommand = (command: string): void => {
+    const parts = command.trim().split(/\s+/)
+    const cmd = parts[0]
+
+    switch (cmd) {
+      case '/help':
+        setCommandOutput(
+          SLASH_COMMANDS.map((c) => `  ${c.name.padEnd(12)} ${c.description}`).join('\n')
+        )
+        break
+      case '/clear':
+        setMessages([])
+        setCommandOutput('Conversation cleared.')
+        break
+      case '/status':
+        setCommandOutput(`Working directory: ${process.cwd()}\nSession: ${sessionRef.current?.id ?? 'none'}`)
+        break
+      case '/version':
+        setCommandOutput(`${NAME} v${VERSION}`)
+        break
+      default:
+        setCommandOutput(`Unknown command: ${cmd}`)
+    }
+  }
+
+  if (!ready) {
+    return (
+      <Box>
+        <Text dimColor>Starting {NAME}...</Text>
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="column">
+      <Text bold color="cyan">{NAME} v{VERSION}</Text>
+      <Text dimColor>Type your message, /help for commands, Ctrl+D to exit</Text>
+      <Text> </Text>
+
+      <MessageList messages={messages} />
+
+      {status === 'thinking' && <StatusIndicator />}
+      {status === 'tool' && currentTool && <ToolCallDisplay name={currentTool.name} args={currentTool.args} />}
+      {status === 'streaming' && streamingText && <StreamingText text={streamingText} />}
+
+      {permReq && (
+        <PermissionPrompt tool={permReq.tool} args={permReq.args} />
+      )}
+
+      {commandOutput && (
+        <Box marginBottom={1}>
+          <Text dimColor>{commandOutput}</Text>
+        </Box>
+      )}
+
+      {matches.length > 0 && (
+        <Autocomplete matches={matches} selectedIndex={matchIdx} />
+      )}
+
+      <Box>
+        <Text color="blue">{multiline ? '... ' : '> '}</Text>
+        <TextInput
+          value={inputValue}
+          onChange={handleInputChange}
+          onSubmit={handleSubmit}
+          focus={status === 'idle' && !permReq}
+        />
+      </Box>
+    </Box>
+  )
+}
