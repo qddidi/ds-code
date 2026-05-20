@@ -25,7 +25,7 @@ ds-code 是一个基于 Node.js 的交互式 AI 编程助手 CLI 工具，功能
 | 运行时 | Node.js >= 20 | LTS 版本，原生支持 ESM |
 | 语言 | TypeScript 5.x | 类型安全，开发体验好 |
 | CLI 框架 | 自研（基于 readline/stdin） | Claude Code 风格的交互式 REPL，现有框架不适配 |
-| 终端 UI | 原生 ANSI + chalk | 轻量，直接控制终端输出 |
+| 终端 UI | Ink UI | 轻量，直接控制终端输出 |
 | Markdown 渲染 | marked + marked-terminal | 终端内渲染 markdown |
 | 代码高亮 | cli-highlight | 终端代码语法高亮 |
 | 文件搜索 | fast-glob | 高性能 glob 匹配 |

@@ -1,22 +1,26 @@
 {
-  "name": "ds-code",
+  "name": "@mrdistore/ds-code",
   "version": "0.1.0",
   "description": "AI-powered coding assistant CLI using DeepSeek API",
   "type": "module",
   "bin": {
-    "ds-code": "./dist/bin/ds-code.js"
+    "ds-code": "dist/bin/ds-code.js"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "tsx bin/ds-code.tsx",
     "build": "tsup",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",
@@ -25,6 +29,11 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qddidi/ds-code.git"
+  },
+  "homepage": "https://github.com/qddidi/ds-code#readme",
   "keywords": [
     "cli",
     "ai",
