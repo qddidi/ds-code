@@ -25,13 +25,13 @@ ds-code 是一个基于 Node.js 的交互式 AI 编程助手 CLI 工具，功能
 | 运行时 | Node.js >= 20 | LTS 版本，原生支持 ESM |
 | 语言 | TypeScript 5.x | 类型安全，开发体验好 |
 | CLI 框架 | 自研（基于 readline/stdin） | Claude Code 风格的交互式 REPL，现有框架不适配 |
-| 终端 UI | ink (React for CLI) | 灵活的终端渲染，支持复杂布局 |
+| 终端 UI | 原生 ANSI + chalk | 轻量，直接控制终端输出 |
 | Markdown 渲染 | marked + marked-terminal | 终端内渲染 markdown |
 | 代码高亮 | cli-highlight | 终端代码语法高亮 |
 | 文件搜索 | fast-glob | 高性能 glob 匹配 |
 | 内容搜索 | ripgrep (子进程调用) | 极快的正则搜索 |
-| HTTP 客户端 | undici / node 原生 fetch | 流式请求支持好 |
-| 配置管理 | cosmiconfig | 标准的配置文件发现 |
+| HTTP 客户端 | node 原生 fetch | 流式请求支持好 |
+| 配置管理 | 自研（JSON 文件加载） | 简单直接，无额外依赖 |
 | 构建工具 | tsup | 快速打包，零配置 |
 | 包管理 | pnpm | 快速、磁盘友好 |
 | 测试 | vitest | 快速，兼容 ESM |
@@ -47,22 +47,30 @@ ds-code/
 ├── bin/
 │   └── ds-code.ts              # CLI 入口
 ├── src/
-│   ├── index.ts                # 主入口
+│   ├── index.ts                # 主入口（导出 NAME, VERSION）
 │   ├── cli/
+│   │   ├── index.ts            # CLI 模块导出
 │   │   ├── repl.ts             # REPL 交互循环
-│   │   ├── input.ts            # 用户输入处理
-│   │   ├── output.ts           # 输出渲染（markdown、代码块）
-│   │   └── spinner.ts          # 加载动画
+│   │   ├── input.ts            # 用户输入解析
+│   │   ├── output.ts           # 输出渲染（markdown、工具结果）
+│   │   ├── spinner.ts          # 加载动画
+│   │   ├── commands.ts         # 斜杠命令定义与匹配
+│   │   ├── slash-autocomplete.ts # 斜杠命令 inline 补全
+│   │   ├── model.ts            # /model 命令处理
+│   │   └── permission-prompt.ts # 权限确认交互
 │   ├── core/
 │   │   ├── agent.ts            # Agent 主循环（对话 + 工具调用）
 │   │   ├── context.ts          # 上下文管理与压缩
-│   │   ├── message.ts          # 消息类型定义
+│   │   ├── message.ts          # 消息构造工具函数
 │   │   └── session.ts          # 会话持久化
 │   ├── api/
+│   │   ├── index.ts            # API 模块导出
 │   │   ├── deepseek.ts         # DeepSeek API 客户端
-│   │   ├── stream.ts           # 流式响应处理
+│   │   ├── stream.ts           # SSE 流式解析器
+│   │   ├── retry.ts            # 错误重试（指数退避）
 │   │   └── types.ts            # API 类型定义
 │   ├── tools/
+│   │   ├── index.ts            # 工具模块导出
 │   │   ├── registry.ts         # 工具注册中心
 │   │   ├── types.ts            # 工具接口定义
 │   │   ├── read.ts             # 文件读取
@@ -73,20 +81,28 @@ ds-code/
 │   │   ├── bash.ts             # 命令执行
 │   │   └── list-dir.ts         # 目录列表
 │   ├── permissions/
+│   │   ├── index.ts            # 权限模块导出
 │   │   ├── manager.ts          # 权限管理
 │   │   └── rules.ts            # 权限规则定义
 │   ├── config/
+│   │   ├── index.ts            # 配置模块导出
 │   │   ├── loader.ts           # 配置加载
 │   │   ├── schema.ts           # 配置 schema
 │   │   └── defaults.ts         # 默认配置
 │   └── utils/
-│       ├── path.ts             # 路径工具
 │       ├── git.ts              # Git 操作
 │       └── token-count.ts      # Token 计数估算
 ├── test/
-│   ├── tools/
+│   ├── api/
+│   ├── cli/
 │   ├── core/
-│   └── api/
+│   ├── tools/
+│   ├── permissions/
+│   ├── config/
+│   ├── utils/
+│   ├── integration/
+│   ├── fixtures/
+│   └── helpers/
 └── README.md
 ```
 
@@ -111,16 +127,18 @@ DeepSeek API 兼容 OpenAI 格式，关键参数：
 interface DeepSeekConfig {
   baseUrl: string;       // https://api.deepseek.com
   apiKey: string;        // 用户配置
-  model: string;         // deepseek-chat / deepseek-reasoner
+  model: string;         // deepseek-v4-pro / deepseek-v4-flash / deepseek-reasoner
   maxTokens: number;     // 输出 token 上限
   temperature: number;   // 默认 0
   stream: boolean;       // 默认 true，流式输出
 }
 ```
 
-- 使用 `deepseek-chat` 作为默认模型（支持 function calling）
+- 使用 `deepseek-v4-pro` 作为默认模型（支持 function calling）
+- `deepseek-v4-flash` 作为快速模型
 - 支持流式输出（SSE），逐字渲染到终端
-- 支持 `deepseek-reasoner`（R1）用于复杂推理场景
+- 支持 `deepseek-reasoner`（R1）用于复杂推理场景（reasoning_content 单独处理）
+- 网络错误和限流自动指数退避重试（src/api/retry.ts）
 
 ### 5.3 工具系统
 
@@ -161,9 +179,9 @@ interface Tool {
 | 模型能力差异 | 通过 system prompt 优化指令跟随 |
 | function calling 格式 | DeepSeek 兼容 OpenAI 格式，直接适配 |
 | 流式响应格式 | SSE 格式，与 OpenAI 一致 |
-| token 限制 | deepseek-chat 128K 上下文，8K 输出 |
+| token 限制 | deepseek-v4-pro 128K 上下文，8K 输出 |
 | 不支持 prompt caching | 通过上下文压缩降低成本 |
-| 不支持 extended thinking | 可切换到 deepseek-reasoner 获得思维链 |
+| reasoning_content | reasoner 模型返回思维链，需单独存储并回传 API |
 
 ## 7. 配置文件设计
 
@@ -172,7 +190,7 @@ interface Tool {
 ```json
 {
   "apiKey": "sk-xxx",
-  "model": "deepseek-chat",
+  "model": "deepseek-v4-pro",
   "baseUrl": "https://api.deepseek.com",
   "temperature": 0,
   "maxTokens": 8192,
@@ -197,34 +215,34 @@ interface Tool {
 
 ## 8. 开发计划
 
-### Phase 1 — 基础骨架（1-2 周）
+### Phase 1 — 基础骨架 ✅
 
-- [ ] 项目初始化（TypeScript + pnpm + tsup）
-- [ ] DeepSeek API 客户端（流式请求）
-- [ ] 基础 REPL 交互循环
-- [ ] 终端 Markdown 渲染
-- [ ] 基础 Agent 循环（对话 + 工具调用）
+- [x] 项目初始化（TypeScript + pnpm + tsup）
+- [x] DeepSeek API 客户端（流式请求）
+- [x] 基础 REPL 交互循环
+- [x] 终端 Markdown 渲染
+- [x] 基础 Agent 循环（对话 + 工具调用）
 
-### Phase 2 — 工具实现（1-2 周）
+### Phase 2 — 工具实现 ✅
 
-- [ ] Read / Write / Edit 工具
-- [ ] Glob / Grep 工具
-- [ ] Bash 工具（带权限确认）
-- [ ] ListDir 工具
-- [ ] 工具注册与自动 schema 生成
+- [x] Read / Write / Edit 工具
+- [x] Glob / Grep 工具
+- [x] Bash 工具（带权限确认）
+- [x] ListDir 工具
+- [x] 工具注册与自动 schema 生成
 
-### Phase 3 — 体验优化（1 周）
+### Phase 3 — 体验优化 ✅
 
-- [ ] 权限管理系统
-- [ ] 配置文件加载（全局 + 项目）
-- [ ] 上下文压缩
-- [ ] 会话持久化与恢复
-- [ ] 错误处理与重试
+- [x] 权限管理系统
+- [x] 配置文件加载（全局 + 项目）
+- [x] 上下文压缩
+- [x] 会话持久化与恢复
+- [x] 错误处理与重试
 
-### Phase 4 — 高级功能（1-2 周）
+### Phase 4 — 高级功能（部分完成）
 
-- [ ] 多模型切换（chat / reasoner）
-- [ ] Git 集成（diff、commit 辅助）
+- [x] 多模型切换（v4-pro / v4-flash / reasoner）
+- [x] Git 集成（分支、状态查询）
 - [ ] 子 Agent 支持（并行任务）
 - [ ] 插件/技能系统
 - [ ] npm 发布与全局安装

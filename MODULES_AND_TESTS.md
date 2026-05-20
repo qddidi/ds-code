@@ -18,7 +18,9 @@
 | M12 | 上下文管理 | src/core/context.ts | P2 | M02, M03 |
 | M13 | 会话管理 | src/core/session.ts | P2 | M03 |
 | M14 | Git 集成 | src/utils/git.ts | P2 | M09 |
-| M15 | 多模型支持 | src/api/ | P3 | M02, M11 |
+| M15 | 多模型支持 | src/api/, src/cli/model.ts | P3 | M02, M11 |
+| M16 | 错误重试 | src/api/retry.ts | P1 | M02 |
+| M17 | Token 计数 | src/utils/token-count.ts | P2 | M01 |
 
 ---
 
@@ -58,6 +60,8 @@
 - `src/api/types.ts` — 请求/响应类型定义
 - `src/api/deepseek.ts` — DeepSeek API 封装（chat completions）
 - `src/api/stream.ts` — SSE 流式解析器
+- `src/api/retry.ts` — 错误重试（指数退避）
+- `src/api/index.ts` — 模块导出
 
 ### 完成标准
 
@@ -170,18 +174,26 @@
 ### 范围
 
 - `src/cli/repl.ts` — REPL 主循环
-- `src/cli/input.ts` — 多行输入、快捷键
-- `src/cli/output.ts` — Markdown 渲染、代码高亮
+- `src/cli/input.ts` — 多行输入解析
+- `src/cli/output.ts` — Markdown 渲染、工具结果摘要
 - `src/cli/spinner.ts` — 等待动画
+- `src/cli/commands.ts` — 斜杠命令定义与匹配
+- `src/cli/slash-autocomplete.ts` — 斜杠命令 inline 补全（输入行下方实时提示）
+- `src/cli/model.ts` — /model 命令处理（模型切换）
+- `src/cli/permission-prompt.ts` — 权限确认交互（Y/A/N）
+- `src/cli/index.ts` — 模块导出
 
 ### 完成标准
 
 - 启动后显示欢迎信息和提示符
-- 支持多行输入（Shift+Enter 或 `\`续行）
+- 支持多行输入（`"""` 进入/退出多行模式）
 - AI 响应实时流式输出
 - Markdown 格式正确渲染（标题、列表、代码块）
-- 等待 API 时显示 spinner
+- 等待 API 时显示 spinner（thinking 时更新文字）
 - Ctrl+C 中断当前请求，Ctrl+D 退出
+- 斜杠命令输入时下方实时显示补全提示（↑↓选择、Tab补全、Enter执行）
+- 支持 `--resume` 恢复上次会话
+- 支持位置参数作为 initial prompt
 
 ### 测试
 
@@ -192,6 +204,9 @@
 | Markdown 渲染 — 列表 | 单元 | 有序/无序列表正确缩进 |
 | 输入处理 — 空输入 | 单元 | 空行不触发 API 调用 |
 | 输入处理 — 斜杠命令 | 单元 | /help 等命令不发送给 API |
+| 输入处理 — 多行模式 | 单元 | `"""` 进入多行，再次 `"""` 结束并拼接 |
+| 斜杠命令匹配 | 单元 | `/he` 匹配 /help，`/m` 匹配 /model /memory |
+| 斜杠命令选择 | 单元 | clampSelection 正确循环索引 |
 | Spinner 启停 | 单元 | start() 后 isSpinning=true，stop() 后恢复 |
 | 流式输出 | 集成 | mock 流式响应，验证字符逐个输出 |
 | Ctrl+C 中断 | 集成 | 发送 SIGINT 后当前请求取消，回到提示符 |
@@ -444,27 +459,29 @@
 
 ### 范围
 
-- 扩展 `src/api/deepseek.ts` 支持模型切换
-- deepseek-chat（默认，支持 function calling）
-- deepseek-reasoner（R1，思维链模式）
+- `src/api/deepseek.ts` 支持模型切换
+- `src/cli/model.ts` — /model 命令处理
+- 支持模型：deepseek-v4-pro（默认）、deepseek-v4-flash、deepseek-reasoner
 - 运行时切换命令 `/model`
+- `supportsTools()` 函数判断模型是否支持 function calling
 
 ### 完成标准
 
-- 默认使用 deepseek-chat
-- 用户可通过配置或命令切换模型
-- reasoner 模式下正确处理 reasoning_content 字段
-- 不支持 function calling 的模型降级为纯对话
+- 默认使用 deepseek-v4-pro
+- 用户可通过配置或 `/model` 命令切换模型
+- reasoner 模式下正确处理 reasoning_content 字段（单独存储并回传）
+- 不支持 function calling 的模型（reasoner）不传 tools 参数
 
 ### 测试
 
 | 测试项 | 类型 | 验证内容 |
 |--------|------|---------|
-| 默认模型 | 单元 | 未配置时使用 deepseek-chat |
+| 默认模型 | 单元 | 未配置时使用 deepseek-v4-pro |
 | 切换模型 | 单元 | /model reasoner 后请求使用 deepseek-reasoner |
 | reasoner 响应解析 | 单元 | 正确提取 reasoning_content 和 content |
 | reasoner 无 tools | 单元 | 切换到 reasoner 时不传 tools 参数 |
 | 无效模型名 | 单元 | 返回错误提示可用模型列表 |
+| supportsTools | 单元 | v4-pro/v4-flash 返回 true，reasoner 返回 false |
 
 ---
 
@@ -489,22 +506,45 @@
 ```
 test/
 ├── fixtures/              # 测试用的固定文件
-│   ├── sample-project/    # 模拟项目目录
-│   └── api-responses/     # mock API 响应 JSON
+│   └── sample-project/    # 模拟项目目录
 ├── helpers/
 │   ├── mock-api.ts        # DeepSeek API mock server
 │   ├── temp-dir.ts        # 临时目录创建/清理
-│   └── test-tools.ts      # 工具测试辅助
-├── unit/
-│   ├── api/
-│   ├── core/
-│   ├── tools/
-│   ├── permissions/
-│   └── config/
-└── integration/
-    ├── agent-flow.test.ts
-    ├── file-operations.test.ts
-    └── permission-flow.test.ts
+│   ├── test-tools.ts      # 工具测试辅助
+│   └── test-infrastructure.test.ts  # 测试基础设施自检
+├── api/
+│   ├── deepseek.test.ts   # API 客户端测试
+│   ├── stream.test.ts     # SSE 流解析测试
+│   └── model.test.ts      # 多模型支持测试
+├── cli/
+│   ├── commands.test.ts   # 斜杠命令匹配测试
+│   ├── input.test.ts      # 输入解析测试
+│   ├── output.test.ts     # 输出渲染测试
+│   └── spinner.test.ts    # Spinner 测试
+├── core/
+│   ├── agent.test.ts      # Agent 循环测试
+│   ├── context.test.ts    # 上下文管理测试
+│   ├── message.test.ts    # 消息构造测试
+│   └── session.test.ts    # 会话持久化测试
+├── tools/
+│   ├── registry.test.ts   # 工具注册测试
+│   ├── read.test.ts       # 文件读取测试
+│   ├── write.test.ts      # 文件写入测试
+│   ├── edit.test.ts       # 文件编辑测试
+│   ├── glob.test.ts       # 文件搜索测试
+│   ├── grep.test.ts       # 内容搜索测试
+│   ├── bash.test.ts       # 命令执行测试
+│   └── list-dir.test.ts   # 目录列表测试
+├── permissions/
+│   └── manager.test.ts    # 权限管理测试
+├── config/
+│   └── loader.test.ts     # 配置加载测试
+├── utils/
+│   ├── git.test.ts        # Git 工具测试
+│   └── token-count.test.ts # Token 计数测试
+├── integration/
+│   └── real-deepseek-flow.test.ts  # 真实 API 集成测试
+└── index.test.ts          # 主入口测试
 ```
 
 ### 测试约定
