@@ -3,12 +3,13 @@ import parser from '@typescript-eslint/parser'
 
 export default [
   {
-    files: ['src/**/*.ts', 'bin/**/*.ts'],
+    files: ['src/**/*.ts', 'src/**/*.tsx', 'bin/**/*.ts', 'bin/**/*.tsx'],
     languageOptions: {
       parser,
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
+        ecmaFeatures: { jsx: true },
       },
     },
     plugins: {

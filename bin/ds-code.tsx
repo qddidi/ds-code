@@ -56,7 +56,8 @@ render(
     ...(model ? { model } : {}),
     ...(initialPrompt ? { initialPrompt } : {}),
     resume,
-  })
+  }),
+  { exitOnCtrlC: false }
 )
 
 function readOption(name: string): string | undefined {
