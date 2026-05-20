@@ -1,51 +1,37 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Agent } from '../../src/core/agent.js'
 import { ToolRegistry } from '../../src/tools/registry.js'
-import type { DeepSeekClient } from '../../src/api/deepseek.js'
-import type { ChatCompletionResponse } from '../../src/api/types.js'
+import type { DeepSeekClient, StreamCallbacks } from '../../src/api/deepseek.js'
+import type { ChatMessage } from '../../src/api/types.js'
 import type { Tool } from '../../src/tools/types.js'
 
-function textResponse(content: string): ChatCompletionResponse {
+function textMessage(content: string): ChatMessage {
+  return { role: 'assistant', content }
+}
+
+function toolCallMessage(calls: { name: string; args: string; id?: string }[], reasoningContent?: string): ChatMessage {
   return {
-    id: 'resp-1',
-    object: 'chat.completion',
-    created: Date.now(),
-    model: 'deepseek-chat',
-    choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
-    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    role: 'assistant',
+    content: null,
+    ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+    tool_calls: calls.map((c, i) => ({
+      id: c.id ?? `call_${i}`,
+      type: 'function' as const,
+      function: { name: c.name, arguments: c.args },
+    })),
   }
 }
 
-function toolCallResponse(calls: { name: string; args: string; id?: string }[], reasoningContent?: string): ChatCompletionResponse {
-  return {
-    id: 'resp-2',
-    object: 'chat.completion',
-    created: Date.now(),
-    model: 'deepseek-chat',
-    choices: [{
-      index: 0,
-      message: {
-        role: 'assistant',
-        content: null,
-        ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
-        tool_calls: calls.map((c, i) => ({
-          id: c.id ?? `call_${i}`,
-          type: 'function' as const,
-          function: { name: c.name, arguments: c.args },
-        })),
-      },
-      finish_reason: 'tool_calls',
-    }],
-    usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 },
-  }
-}
-
-function createMockClient(responses: ChatCompletionResponse[]): DeepSeekClient {
+function createMockClient(responses: ChatMessage[]): DeepSeekClient {
   let callIndex = 0
   return {
-    chat: vi.fn(async () => {
+    chatStream: vi.fn(async (_messages: ChatMessage[], callbacks: StreamCallbacks) => {
       const resp = responses[callIndex]!
       callIndex++
+      if (resp.content) {
+        callbacks.onContent?.(resp.content)
+      }
+      callbacks.onDone?.(resp)
       return resp
     }),
   } as unknown as DeepSeekClient
@@ -80,8 +66,8 @@ function createFailingTool(): Tool {
 }
 
 describe('Agent', () => {
-  it('returns text response directly', async () => {
-    const client = createMockClient([textResponse('Hello!')])
+  it('returns text content from a simple response', async () => {
+    const client = createMockClient([textMessage('Hello!')])
     const registry = new ToolRegistry()
     const agent = new Agent(client, registry)
 
@@ -90,7 +76,7 @@ describe('Agent', () => {
   })
 
   it('calls onContent callback for text response', async () => {
-    const client = createMockClient([textResponse('World')])
+    const client = createMockClient([textMessage('World')])
     const registry = new ToolRegistry()
     const agent = new Agent(client, registry)
 
@@ -101,8 +87,8 @@ describe('Agent', () => {
 
   it('executes single tool call and returns final text', async () => {
     const client = createMockClient([
-      toolCallResponse([{ name: 'echo', args: '{"text":"ping"}' }]),
-      textResponse('Done'),
+      toolCallMessage([{ name: 'echo', args: '{"text":"ping"}' }]),
+      textMessage('Done'),
     ])
     const registry = new ToolRegistry()
     registry.register(createEchoTool())
@@ -118,8 +104,8 @@ describe('Agent', () => {
 
   it('preserves reasoning content on tool-call assistant messages', async () => {
     const client = createMockClient([
-      toolCallResponse([{ name: 'echo', args: '{"text":"ping"}', id: 'c1' }], '需要先查看工具结果'),
-      textResponse('Done'),
+      toolCallMessage([{ name: 'echo', args: '{"text":"ping"}', id: 'c1' }], '需要先查看工具结果'),
+      textMessage('Done'),
     ])
     const registry = new ToolRegistry()
     registry.register(createEchoTool())
@@ -133,9 +119,9 @@ describe('Agent', () => {
 
   it('handles consecutive tool calls (2 rounds)', async () => {
     const client = createMockClient([
-      toolCallResponse([{ name: 'echo', args: '{"text":"first"}', id: 'c1' }]),
-      toolCallResponse([{ name: 'echo', args: '{"text":"second"}', id: 'c2' }]),
-      textResponse('All done'),
+      toolCallMessage([{ name: 'echo', args: '{"text":"first"}', id: 'c1' }]),
+      toolCallMessage([{ name: 'echo', args: '{"text":"second"}', id: 'c2' }]),
+      textMessage('All done'),
     ])
     const registry = new ToolRegistry()
     registry.register(createEchoTool())
@@ -152,11 +138,11 @@ describe('Agent', () => {
 
   it('handles parallel tool calls (multiple in one response)', async () => {
     const client = createMockClient([
-      toolCallResponse([
+      toolCallMessage([
         { name: 'echo', args: '{"text":"a"}', id: 'c1' },
         { name: 'echo', args: '{"text":"b"}', id: 'c2' },
       ]),
-      textResponse('Both done'),
+      textMessage('Both done'),
     ])
     const registry = new ToolRegistry()
     registry.register(createEchoTool())
@@ -173,7 +159,7 @@ describe('Agent', () => {
 
   it('stops at maxIterations and returns error', async () => {
     const infiniteToolCalls = Array.from({ length: 5 }, () =>
-      toolCallResponse([{ name: 'echo', args: '{"text":"loop"}' }]),
+      toolCallMessage([{ name: 'echo', args: '{"text":"loop"}' }]),
     )
     const client = createMockClient(infiniteToolCalls)
     const registry = new ToolRegistry()
@@ -189,8 +175,8 @@ describe('Agent', () => {
 
   it('handles tool execution failure gracefully', async () => {
     const client = createMockClient([
-      toolCallResponse([{ name: 'fail', args: '{"msg":"x"}', id: 'c1' }]),
-      textResponse('Handled error'),
+      toolCallMessage([{ name: 'fail', args: '{"msg":"x"}', id: 'c1' }]),
+      textMessage('Handled error'),
     ])
     const registry = new ToolRegistry()
     registry.register(createFailingTool())
@@ -208,8 +194,8 @@ describe('Agent', () => {
 
   it('accumulates message history across multiple runs', async () => {
     const client = createMockClient([
-      textResponse('First reply'),
-      textResponse('Second reply'),
+      textMessage('First reply'),
+      textMessage('Second reply'),
     ])
     const registry = new ToolRegistry()
     const agent = new Agent(client, registry)

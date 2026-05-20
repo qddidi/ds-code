@@ -12,6 +12,7 @@ import {
   RateLimitError,
 } from './types.js'
 import { parseSSEStream } from './stream.js'
+import { withRetry } from './retry.js'
 
 const DEFAULT_CONFIG: DeepSeekClientConfig = {
   baseUrl: 'https://api.deepseek.com',
@@ -40,6 +41,7 @@ export function supportsTools(model: string): boolean {
 
 export interface StreamCallbacks {
   onContent?: (text: string) => void
+  onThinking?: (text: string) => void
   onToolCall?: (toolCall: ToolCall) => void
   onDone?: (message: ChatMessage) => void
   onError?: (error: Error) => void
@@ -95,6 +97,7 @@ export class DeepSeekClient {
     messages: ChatMessage[],
     callbacks: StreamCallbacks,
     tools?: ToolDefinition[],
+    signal?: AbortSignal,
   ): Promise<ChatMessage> {
     const body: ChatCompletionRequest = {
       model: this.config.model,
@@ -109,7 +112,7 @@ export class DeepSeekClient {
       body.tool_choice = 'auto'
     }
 
-    const response = await this.fetchRaw(body)
+    const response = await withRetry(() => this.fetchRaw(body, signal))
     return this.processStream(response, callbacks)
   }
 
@@ -118,6 +121,7 @@ export class DeepSeekClient {
     callbacks: StreamCallbacks,
   ): Promise<ChatMessage> {
     let content = ''
+    let reasoningContent = ''
     const toolCalls: Map<number, ToolCall> = new Map()
 
     for await (const event of parseSSEStream(response)) {
@@ -138,7 +142,8 @@ export class DeepSeekClient {
         }
 
         if (delta?.reasoning_content) {
-          content += delta.reasoning_content
+          reasoningContent += delta.reasoning_content
+          callbacks.onThinking?.(delta.reasoning_content)
         }
 
         if (delta?.tool_calls) {
@@ -168,6 +173,10 @@ export class DeepSeekClient {
       content: content || null,
     }
 
+    if (reasoningContent) {
+      message.reasoning_content = reasoningContent
+    }
+
     if (toolCalls.size > 0) {
       message.tool_calls = [...toolCalls.values()]
       for (const tc of message.tool_calls) {
@@ -184,10 +193,19 @@ export class DeepSeekClient {
     return response.json()
   }
 
-  private async fetchRaw(body: ChatCompletionRequest): Promise<Response> {
+  private async fetchRaw(body: ChatCompletionRequest, externalSignal?: AbortSignal): Promise<Response> {
     const url = `${this.config.baseUrl}/v1/chat/completions`
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+
+    const onExternalAbort = (): void => { controller.abort() }
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        clearTimeout(timeoutId)
+        throw new NetworkError('Request aborted')
+      }
+      externalSignal.addEventListener('abort', onExternalAbort)
+    }
 
     let response: Response
     try {
@@ -202,6 +220,10 @@ export class DeepSeekClient {
       })
     } catch (err) {
       clearTimeout(timeoutId)
+      externalSignal?.removeEventListener('abort', onExternalAbort)
+      if (externalSignal?.aborted) {
+        throw new NetworkError('Request aborted')
+      }
       if (err instanceof Error && err.name === 'AbortError') {
         throw new NetworkError('Request timed out')
       }
@@ -210,6 +232,7 @@ export class DeepSeekClient {
       )
     } finally {
       clearTimeout(timeoutId)
+      externalSignal?.removeEventListener('abort', onExternalAbort)
     }
 
     if (!response.ok) {

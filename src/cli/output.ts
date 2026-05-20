@@ -86,9 +86,11 @@ function safeParse(args: string): Record<string, string> | null {
   }
 }
 
-export function renderToolResult(name: string, isError: boolean): string {
+export function renderToolResult(name: string, isError: boolean, result?: string): string {
   const icon = isError ? chalk.red('✗') : chalk.green('✓')
-  return `${chalk.dim('└')} ${icon} ${chalk.dim(name)}`
+  const summary = result ? toolResultSummary(name, result, isError) : ''
+  const suffix = summary ? ` ${chalk.dim(summary)}` : ''
+  return `${chalk.dim('└')} ${icon} ${chalk.dim(name)}${suffix}`
 }
 
 export function renderWelcome(version: string): string {
@@ -163,5 +165,29 @@ export class ReadFileTracker {
     if (this.linesWritten > 0) {
       process.stdout.write(`\x1b[${this.linesWritten}A\x1b[0J`)
     }
+  }
+}
+
+function toolResultSummary(name: string, result: string, isError: boolean): string {
+  if (isError) {
+    const firstLine = result.split('\n')[0] ?? ''
+    return truncate(firstLine, 50)
+  }
+
+  switch (name) {
+    case 'write_file': {
+      const lines = result.match(/wrote (\d+) bytes/i)
+      return lines ? lines[0] : ''
+    }
+    case 'bash': {
+      const exitMatch = result.match(/exitCode=(\d+|null)/)
+      const code = exitMatch?.[1] ?? '?'
+      return `exit ${code}`
+    }
+    case 'edit_file': {
+      return 'applied'
+    }
+    default:
+      return ''
   }
 }

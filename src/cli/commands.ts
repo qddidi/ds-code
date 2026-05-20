@@ -12,6 +12,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/model', description: '查看或切换模型' },
   { name: '/status', description: '查看当前项目状态' },
   { name: '/tools', description: '查看可用工具' },
+  { name: '/resume', description: '恢复上次会话' },
   { name: '/memory', description: '查看会话记忆提示' },
   { name: '/compact', description: '压缩当前上下文' },
   { name: '/cost', description: '查看本次会话消耗提示' },

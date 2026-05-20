@@ -14,5 +14,5 @@ export interface Tool {
   description: string
   parameters: ToolParameters
   requiresPermission: boolean
-  execute(params: Record<string, unknown>): Promise<ToolResult>
+  execute(params: Record<string, unknown>, signal?: AbortSignal): Promise<ToolResult>
 }

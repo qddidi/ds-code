@@ -20,12 +20,12 @@ export const bashTool: Tool = {
   },
   requiresPermission: true,
 
-  async execute(params: Record<string, unknown>): Promise<ToolResult> {
+  async execute(params: Record<string, unknown>, signal?: AbortSignal): Promise<ToolResult> {
     const command = params.command as string
     const cwd = params.cwd ? resolve(params.cwd as string) : process.cwd()
     const timeoutMs = normalizeTimeout(params.timeout_ms)
 
-    return executeCommand(command, cwd, timeoutMs)
+    return executeCommand(command, cwd, timeoutMs, signal)
   },
 }
 
@@ -34,8 +34,13 @@ function normalizeTimeout(value: unknown): number {
   return Math.min(MAX_TIMEOUT_MS, Math.max(1, Math.trunc(value)))
 }
 
-function executeCommand(command: string, cwd: string, timeoutMs: number): Promise<ToolResult> {
+function executeCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
   return new Promise((resolveResult) => {
+    if (signal?.aborted) {
+      resolveResult({ content: formatResult('', '', null, false, true), isError: true })
+      return
+    }
+
     const child = spawn(command, {
       cwd,
       shell: true,
@@ -45,13 +50,27 @@ function executeCommand(command: string, cwd: string, timeoutMs: number): Promis
     let stdout = ''
     let stderr = ''
     let timedOut = false
+    let aborted = false
     let settled = false
 
     const finish = (result: ToolResult): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
       resolveResult(result)
+    }
+
+    const onAbort = (): void => {
+      aborted = true
+      child.kill('SIGTERM')
+      setTimeout(() => {
+        if (!settled) child.kill('SIGKILL')
+      }, 100)
+    }
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort)
     }
 
     const timer = setTimeout(() => {
@@ -72,25 +91,26 @@ function executeCommand(command: string, cwd: string, timeoutMs: number): Promis
 
     child.on('error', (err) => {
       finish({
-        content: formatResult(stdout, stderr || err.message, null, timedOut),
+        content: formatResult(stdout, stderr || err.message, null, timedOut, aborted),
         isError: true,
       })
     })
 
     child.on('close', (code) => {
       finish({
-        content: formatResult(stdout, stderr, code, timedOut),
-        isError: timedOut || undefined,
+        content: formatResult(stdout, stderr, code, timedOut, aborted),
+        isError: timedOut || aborted || undefined,
       })
     })
   })
 }
 
-function formatResult(stdout: string, stderr: string, exitCode: number | null, timedOut: boolean): string {
+function formatResult(stdout: string, stderr: string, exitCode: number | null, timedOut: boolean, aborted: boolean): string {
   return [
     `stdout=${JSON.stringify(stdout)}`,
     `stderr=${JSON.stringify(stderr)}`,
     `exitCode=${exitCode === null ? 'null' : exitCode}`,
     `timedOut=${timedOut}`,
+    `aborted=${aborted}`,
   ].join('\n')
 }

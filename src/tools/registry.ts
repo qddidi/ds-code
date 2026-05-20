@@ -1,8 +1,10 @@
 import type { ToolDefinition } from '../api/types.js'
 import type { Tool, ToolResult } from './types.js'
+import type { PermissionManager } from '../permissions/manager.js'
 
 export class ToolRegistry {
   private tools = new Map<string, Tool>()
+  private permissionManager: PermissionManager | null = null
 
   register(tool: Tool): void {
     if (this.tools.has(tool.name)) {
@@ -34,10 +36,18 @@ export class ToolRegistry {
     }))
   }
 
-  async execute(name: string, argsJson: string): Promise<ToolResult> {
+  setPermissionManager(manager: PermissionManager): void {
+    this.permissionManager = manager
+  }
+
+  async execute(name: string, argsJson: string, signal?: AbortSignal): Promise<ToolResult> {
     const tool = this.tools.get(name)
     if (!tool) {
       return { content: `Unknown tool: ${name}`, isError: true }
+    }
+
+    if (signal?.aborted) {
+      return { content: 'Aborted', isError: true }
     }
 
     let params: Record<string, unknown>
@@ -47,13 +57,23 @@ export class ToolRegistry {
       return { content: `Invalid JSON arguments: ${argsJson}`, isError: true }
     }
 
+    if (this.permissionManager && tool.requiresPermission) {
+      const permResult = await this.permissionManager.check(tool, params)
+      if (permResult.decision === 'deny') {
+        return { content: `Permission denied: ${permResult.reason}`, isError: true }
+      }
+      if (permResult.decision === 'confirm') {
+        return { content: `Permission denied: ${permResult.reason}`, isError: true }
+      }
+    }
+
     const validationError = this.validate(tool, params)
     if (validationError) {
       return { content: validationError, isError: true }
     }
 
     try {
-      return await tool.execute(params)
+      return await tool.execute(params, signal)
     } catch (err) {
       return {
         content: err instanceof Error ? err.message : String(err),
