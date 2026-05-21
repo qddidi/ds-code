@@ -24,12 +24,12 @@ ds-code 是一个基于 Node.js 的交互式 AI 编程助手 CLI 工具，功能
 |------|------|------|
 | 运行时 | Node.js >= 20 | LTS 版本，原生支持 ESM |
 | 语言 | TypeScript 5.x | 类型安全，开发体验好 |
-| CLI 框架 | 自研（基于 readline/stdin） | Claude Code 风格的交互式 REPL，现有框架不适配 |
+| CLI 框架 | Ink UI (React) | React 渲染终端 UI，组件化开发 |
 | 终端 UI | Ink UI | 轻量，直接控制终端输出 |
 | Markdown 渲染 | marked + marked-terminal | 终端内渲染 markdown |
 | 代码高亮 | cli-highlight | 终端代码语法高亮 |
 | 文件搜索 | fast-glob | 高性能 glob 匹配 |
-| 内容搜索 | ripgrep (子进程调用) | 极快的正则搜索 |
+| 内容搜索 | node child_process (grep) | 兼容性好，跨平台 |
 | HTTP 客户端 | node 原生 fetch | 流式请求支持好 |
 | 配置管理 | 自研（JSON 文件加载） | 简单直接，无额外依赖 |
 | 构建工具 | tsup | 快速打包，零配置 |
@@ -45,19 +45,23 @@ ds-code/
 ├── tsup.config.ts
 ├── vitest.config.ts
 ├── bin/
-│   └── ds-code.ts              # CLI 入口
+│   └── ds-code.tsx              # CLI 入口（Ink 渲染）
 ├── src/
 │   ├── index.ts                # 主入口（导出 NAME, VERSION）
 │   ├── cli/
 │   │   ├── index.ts            # CLI 模块导出
-│   │   ├── repl.ts             # REPL 交互循环
+│   │   ├── app.tsx             # Ink 主应用组件（REPL 循环）
 │   │   ├── input.ts            # 用户输入解析
 │   │   ├── output.ts           # 输出渲染（markdown、工具结果）
-│   │   ├── spinner.ts          # 加载动画
 │   │   ├── commands.ts         # 斜杠命令定义与匹配
-│   │   ├── slash-autocomplete.ts # 斜杠命令 inline 补全
 │   │   ├── model.ts            # /model 命令处理
-│   │   └── permission-prompt.ts # 权限确认交互
+│   │   └── components/         # Ink React 组件
+│   │       ├── message-list.tsx       # 消息列表
+│   │       ├── streaming-text.tsx     # 流式文本渲染
+│   │       ├── status-indicator.tsx   # 加载动画（ink-spinner）
+│   │       ├── tool-call.tsx          # 工具调用展示
+│   │       ├── autocomplete.tsx       # 斜杠命令 inline 补全
+│   │       └── permission-prompt.tsx  # 权限确认交互
 │   ├── core/
 │   │   ├── agent.ts            # Agent 主循环（对话 + 工具调用）
 │   │   ├── context.ts          # 上下文管理与压缩
@@ -94,15 +98,44 @@ ds-code/
 │       └── token-count.ts      # Token 计数估算
 ├── test/
 │   ├── api/
+│   │   ├── deepseek.test.ts
+│   │   ├── model.test.ts
+│   │   └── stream.test.ts
 │   ├── cli/
+│   │   ├── commands.test.ts
+│   │   ├── input.test.ts
+│   │   └── output.test.ts
 │   ├── core/
+│   │   ├── agent.test.ts
+│   │   ├── context.test.ts
+│   │   ├── message.test.ts
+│   │   └── session.test.ts
 │   ├── tools/
+│   │   ├── bash.test.ts
+│   │   ├── edit.test.ts
+│   │   ├── glob.test.ts
+│   │   ├── grep.test.ts
+│   │   ├── list-dir.test.ts
+│   │   ├── read.test.ts
+│   │   ├── registry.test.ts
+│   │   └── write.test.ts
 │   ├── permissions/
+│   │   └── manager.test.ts
 │   ├── config/
+│   │   └── loader.test.ts
 │   ├── utils/
+│   │   ├── git.test.ts
+│   │   └── token-count.test.ts
 │   ├── integration/
+│   │   └── real-deepseek-flow.test.ts
 │   ├── fixtures/
+│   │   ├── api-responses/
+│   │   └── sample-project/
 │   └── helpers/
+│       ├── mock-api.ts
+│       ├── temp-dir.ts
+│       ├── test-infrastructure.test.ts
+│       └── test-tools.ts
 └── README.md
 ```
 
@@ -128,8 +161,9 @@ interface DeepSeekConfig {
   baseUrl: string;       // https://api.deepseek.com
   apiKey: string;        // 用户配置
   model: string;         // deepseek-v4-pro / deepseek-v4-flash / deepseek-reasoner
-  maxTokens: number;     // 输出 token 上限
-  temperature: number;   // 默认 0
+  maxTokens: number;     // 输出 token 上限（默认 4096）
+  temperature: number;   // 默认 0.2
+  timeout: number;       // 请求超时（默认 120000ms）
   stream: boolean;       // 默认 true，流式输出
 }
 ```
@@ -168,9 +202,9 @@ interface Tool {
 
 ### 5.5 上下文管理
 
-- 使用 tiktoken 或简单估算进行 token 计数
-- 当上下文接近模型限制（64K/128K）时，自动压缩早期对话
-- 压缩策略：用 DeepSeek 对早期消息生成摘要，替换原始消息
+- 使用自研 token 估算算法（基于字符类型估算，CJK 字符 ~1.5 token/字，英文 ~0.25 token/字符）
+- 当上下文接近模型限制（默认 64K 的 80%）时，自动压缩早期对话
+- 压缩策略：用 DeepSeek API 对早期消息生成摘要，替换原始消息，保留最近 4 条消息
 
 ## 6. DeepSeek API 与 Claude API 差异处理
 
@@ -192,11 +226,11 @@ interface Tool {
   "apiKey": "sk-xxx",
   "model": "deepseek-v4-pro",
   "baseUrl": "https://api.deepseek.com",
-  "temperature": 0,
-  "maxTokens": 8192,
+  "temperature": 0.2,
+  "maxTokens": 4096,
+  "timeout": 120000,
   "permissions": {
-    "allowedCommands": ["npm test", "npm run build"],
-    "autoApproveRead": true
+    "allowedCommands": ["npm test", "npm run build"]
   }
 }
 ```
@@ -206,7 +240,6 @@ interface Tool {
 ```json
 {
   "model": "deepseek-reasoner",
-  "systemPrompt": "你是一个专注于本项目的编程助手...",
   "permissions": {
     "allowedCommands": ["pnpm dev"]
   }
@@ -251,16 +284,17 @@ interface Tool {
 
 ```bash
 # 安装
-npm install -g ds-code
+npm install -g @mrdistore/ds-code
 
 # 使用
 ds-code                    # 在当前目录启动
 ds-code "修复这个 bug"      # 带初始 prompt 启动
 ds-code --model reasoner   # 使用 R1 模型
+ds-code --resume           # 恢复上次会话
 
 # 开发
 pnpm install
-pnpm dev                   # 开发模式
+pnpm dev                   # 开发模式 (tsx bin/ds-code.tsx)
 pnpm build                 # 构建
 pnpm test                  # 测试
 ```

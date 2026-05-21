@@ -39,8 +39,15 @@ export class ContextManager {
   async compress(summarize: (messages: ChatMessage[]) => Promise<string>): Promise<void> {
     const systemMessages = this.messages.filter((message) => message.role === 'system')
     const nonSystemMessages = this.messages.filter((message) => message.role !== 'system')
-    const recentMessages = nonSystemMessages.slice(-this.preserveRecentMessages)
-    const compressibleMessages = nonSystemMessages.slice(0, Math.max(0, nonSystemMessages.length - this.preserveRecentMessages))
+
+    let splitIdx = Math.max(0, nonSystemMessages.length - this.preserveRecentMessages)
+
+    while (splitIdx > 0 && nonSystemMessages[splitIdx]?.role === 'tool') {
+      splitIdx--
+    }
+
+    const recentMessages = nonSystemMessages.slice(splitIdx)
+    const compressibleMessages = nonSystemMessages.slice(0, splitIdx)
 
     if (compressibleMessages.length === 0) return
 

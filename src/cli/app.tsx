@@ -306,6 +306,15 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         input,
         {
           onContent: (chunk) => {
+            setToolHistory((h) => {
+              if (bufferRef.current === '' && h.length > 0) {
+                for (const t of h) {
+                  setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+                }
+                return []
+              }
+              return h
+            })
             setStatus('streaming')
             bufferRef.current += chunk
           },
@@ -313,6 +322,11 @@ You have tools to read, write, edit, list, search files, and execute shell comma
             setStatus('thinking')
           },
           onToolCall: (name, args) => {
+            if (bufferRef.current) {
+              setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+              bufferRef.current = ''
+              setStreamingText('')
+            }
             setStatus('tool')
             let parsed: Record<string, unknown> = {}
             try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
@@ -336,6 +350,12 @@ You have tools to read, write, edit, list, search files, and execute shell comma
         controller.signal,
       )
 
+      setToolHistory((h) => {
+        for (const t of h) {
+          setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+        }
+        return []
+      })
       if (bufferRef.current) {
         setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
       }
@@ -501,7 +521,10 @@ You have tools to read, write, edit, list, search files, and execute shell comma
 
       {toolHistory.length > 0 && (
         <Box flexDirection="column" marginBottom={0}>
-          {toolHistory.map((t, i) => (
+          {toolHistory.length > 5 && (
+            <Text dimColor>  ... {toolHistory.length - 5} more tools above</Text>
+          )}
+          {toolHistory.slice(-5).map((t, i) => (
             <ToolCallDisplay key={i} name={t.name} args={t.args} done error={t.error} />
           ))}
         </Box>
