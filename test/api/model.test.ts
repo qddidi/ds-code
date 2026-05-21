@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { DeepSeekClient, normalizeModel, supportsTools } from '../../src/api/deepseek.js'
-import { modelCommand } from '../../src/cli/model.js'
+import { modelCommand, resolveModelCommand } from '../../src/cli/model.js'
 
 function mockFetchResponse(body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -55,6 +55,11 @@ describe('model support', () => {
     expect(client.getModel()).toBe('deepseek-reasoner')
     expect(modelCommand('/model pro')).toBe('deepseek-v4-pro')
     expect(modelCommand('/model flash')).toBe('deepseek-v4-flash')
+    expect(resolveModelCommand('/model reasoner')).toEqual({
+      ok: true,
+      model: 'deepseek-reasoner',
+      message: 'Switched to: deepseek-reasoner',
+    })
   })
 
   it('extracts reasoning_content into content when needed', async () => {

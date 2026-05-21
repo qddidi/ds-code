@@ -20,19 +20,19 @@ describe('git utils', () => {
   })
 
   async function initRepo(): Promise<void> {
-    await execFileAsync('git', ['init'], { cwd: tempDir })
-    await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: tempDir })
-    await execFileAsync('git', ['config', 'user.name', 'Test User'], { cwd: tempDir })
+    await execFileAsync('git', ['init', '--initial-branch=main'], { cwd: tempDir, timeout: 5000 })
+    await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: tempDir, timeout: 5000 })
+    await execFileAsync('git', ['config', 'user.name', 'Test User'], { cwd: tempDir, timeout: 5000 })
     await writeFile(join(tempDir, 'file.txt'), 'hello\n')
-    await execFileAsync('git', ['add', 'file.txt'], { cwd: tempDir })
-    await execFileAsync('git', ['commit', '-m', 'initial'], { cwd: tempDir })
+    await execFileAsync('git', ['add', 'file.txt'], { cwd: tempDir, timeout: 5000 })
+    await execFileAsync('git', ['commit', '-m', 'initial'], { cwd: tempDir, timeout: 5000 })
   }
 
   it('detects a git repository', async () => {
     await initRepo()
 
     await expect(isGitRepository(tempDir)).resolves.toBe(true)
-  })
+  }, 10000)
 
   it('returns false outside a git repository', async () => {
     await expect(isGitRepository(tempDir)).resolves.toBe(false)

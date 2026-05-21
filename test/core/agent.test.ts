@@ -37,9 +37,9 @@ function createMockClient(responses: ChatMessage[]): DeepSeekClient {
   } as unknown as DeepSeekClient
 }
 
-function createEchoTool(): Tool {
+function createEchoTool(name = 'echo'): Tool {
   return {
-    name: 'echo',
+    name,
     description: 'Echoes input',
     parameters: {
       type: 'object',
@@ -139,13 +139,14 @@ describe('Agent', () => {
   it('handles parallel tool calls (multiple in one response)', async () => {
     const client = createMockClient([
       toolCallMessage([
-        { name: 'echo', args: '{"text":"a"}', id: 'c1' },
-        { name: 'echo', args: '{"text":"b"}', id: 'c2' },
+        { name: 'read_file', args: '{"text":"a"}', id: 'c1' },
+        { name: 'grep', args: '{"text":"b"}', id: 'c2' },
       ]),
       textMessage('Both done'),
     ])
     const registry = new ToolRegistry()
-    registry.register(createEchoTool())
+    registry.register(createEchoTool('read_file'))
+    registry.register(createEchoTool('grep'))
     const agent = new Agent(client, registry)
 
     const result = await agent.run('parallel')
@@ -206,5 +207,32 @@ describe('Agent', () => {
     const messages = agent.getMessages()
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(2)
     expect(messages.filter((m) => m.role === 'assistant')).toHaveLength(2)
+  })
+
+  it('includes tool calls when summarizing compressed context', async () => {
+    const client = createMockClient([
+      { role: 'assistant', content: 'summary' },
+    ])
+    const registry = new ToolRegistry()
+    const agent = new Agent(client, registry)
+    agent.loadMessages([
+      { role: 'system', content: 'system' },
+      { role: 'user', content: 'inspect' },
+      toolCallMessage([{ name: 'read_file', args: '{"file_path":"src/index.ts"}', id: 'c1' }]),
+      { role: 'tool', content: 'file content', tool_call_id: 'c1' },
+      { role: 'assistant', content: 'done' },
+      { role: 'user', content: 'next' },
+      { role: 'assistant', content: 'next done' },
+      { role: 'user', content: 'another' },
+      { role: 'assistant', content: 'another done' },
+    ])
+
+    await agent.compressNow()
+
+    const chatStream = vi.mocked(client.chatStream)
+    const summaryMessages = chatStream.mock.calls[0]![0]
+    expect(summaryMessages[1]?.content).toContain('tool_calls=')
+    expect(summaryMessages[1]?.content).toContain('src/index.ts')
+    expect(summaryMessages[1]?.content).toContain('tool_call_id=c1')
   })
 })

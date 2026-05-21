@@ -76,7 +76,7 @@ export class Agent {
       const summaryResponse = await this.client.chatStream(
         [
           systemMessage('Summarize the following conversation concisely, preserving key decisions, file paths, and context needed to continue the work.'),
-          userMessage(msgs.map((m) => `[${m.role}]: ${m.content ?? ''}`).join('\n')),
+          userMessage(formatMessagesForSummary(msgs)),
         ],
         {},
       )
@@ -140,36 +140,62 @@ export class Agent {
         return message.content ?? ''
       }
 
-      const toolResults: ChatMessage[] = []
-
-      for (const toolCall of message.tool_calls) {
-        if (signal?.aborted) {
-          return ''
-        }
-
-        callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
-
-        const result = await this.registry.execute(
-          toolCall.function.name,
-          toolCall.function.arguments,
-          signal,
-        )
-
-        callbacks.onToolResult?.(
-          toolCall.function.name,
-          result.content,
-          result.isError ?? false,
-        )
-
-        const toolMsg = toolResultMessage(toolCall.id, result.content)
-        toolResults.push(toolMsg)
-        this.contextManager.addMessage(toolMsg)
+      const toolResults = await this.executeToolCalls(message.tool_calls, callbacks, signal)
+      if (signal?.aborted) {
+        return ''
       }
 
+      for (const toolMsg of toolResults) {
+        this.contextManager.addMessage(toolMsg)
+      }
       this.messages.push(...toolResults)
     }
 
     callbacks.onMaxIterations?.()
     return `Error: Exceeded maximum iterations (${this.config.maxIterations})`
   }
+
+  private async executeToolCalls(
+    toolCalls: NonNullable<ChatMessage['tool_calls']>,
+    callbacks: AgentCallbacks,
+    signal?: AbortSignal,
+  ): Promise<ChatMessage[]> {
+    if (toolCalls.every((toolCall) => isReadOnlyTool(toolCall.function.name))) {
+      return Promise.all(toolCalls.map(async (toolCall) => {
+        callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
+        const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
+        callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
+        return toolResultMessage(toolCall.id, result.content)
+      }))
+    }
+
+    const results: ChatMessage[] = []
+    for (const toolCall of toolCalls) {
+      if (signal?.aborted) return results
+      callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
+      const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
+      callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
+      results.push(toolResultMessage(toolCall.id, result.content))
+    }
+    return results
+  }
+}
+
+function isReadOnlyTool(name: string): boolean {
+  return name === 'read_file' || name === 'list_dir' || name === 'glob' || name === 'grep'
+}
+
+function formatMessagesForSummary(messages: ChatMessage[]): string {
+  return messages.map(formatMessageForSummary).join('\n')
+}
+
+function formatMessageForSummary(message: ChatMessage): string {
+  const parts = [`[${message.role}]`]
+  if (message.content) parts.push(message.content)
+  if (message.reasoning_content) parts.push(`reasoning_content=${message.reasoning_content}`)
+  if (message.tool_calls) {
+    parts.push(`tool_calls=${JSON.stringify(message.tool_calls)}`)
+  }
+  if (message.tool_call_id) parts.push(`tool_call_id=${message.tool_call_id}`)
+  return parts.join(' ')
 }

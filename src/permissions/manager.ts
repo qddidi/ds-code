@@ -27,6 +27,7 @@ export interface PermissionResult {
 export class PermissionManager {
   private allowedCommands: string[]
   private alwaysAllowedTools = new Set<string>()
+  private alwaysAllowedBashCommands: string[] = []
   private confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 
   constructor(options: PermissionManagerOptions = {}) {
@@ -35,7 +36,7 @@ export class PermissionManager {
   }
 
   async check(tool: Tool, args: Record<string, unknown>): Promise<PermissionResult> {
-    if (this.alwaysAllowedTools.has(tool.name)) {
+    if (tool.name !== 'bash' && this.alwaysAllowedTools.has(tool.name)) {
       return { decision: 'allow', reason: 'Always allowed' }
     }
 
@@ -50,7 +51,11 @@ export class PermissionManager {
     })
 
     if (response === 'allow_always') {
-      this.alwaysAllowedTools.add(tool.name)
+      if (tool.name === 'bash') {
+        this.alwaysAllowedBashCommands.push(String(args.command ?? ''))
+      } else {
+        this.alwaysAllowedTools.add(tool.name)
+      }
       return { decision: 'allow', reason: 'Always allowed' }
     }
 
@@ -67,6 +72,10 @@ export class PermissionManager {
 
       if (isDangerousBashCommand(command)) {
         return { decision: 'deny', reason: 'Dangerous command denied' }
+      }
+
+      if (this.alwaysAllowedBashCommands.some((pattern) => commandMatchesPattern(command, pattern))) {
+        return { decision: 'allow', reason: 'Command was always allowed' }
       }
 
       if (this.allowedCommands.some((pattern) => commandMatchesPattern(command, pattern))) {

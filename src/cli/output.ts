@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import { basename } from 'node:path'
 
 const marked = new Marked()
-marked.use(markedTerminal() as any)
+marked.use(markedTerminal() as Parameters<Marked['use']>[0])
 
 export function renderMarkdown(text: string): string {
   const rendered = marked.parse(text)

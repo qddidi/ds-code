@@ -4,6 +4,8 @@ import React from 'react'
 import { render } from 'ink'
 import { NAME, VERSION } from '../src/index.js'
 import { App } from '../src/cli/app.js'
+import { loadConfig } from '../src/config/loader.js'
+import { resolveCliOptions } from '../src/cli/options.js'
 
 const args = process.argv.slice(2)
 
@@ -34,34 +36,21 @@ Examples:
   process.exit(0)
 }
 
-const apiKey = process.env.DEEPSEEK_API_KEY
-if (!apiKey) {
-  console.error('Missing DEEPSEEK_API_KEY environment variable.')
+const config = await loadConfig()
+const options = resolveCliOptions(args, config, process.env)
+
+if (!options.apiKey) {
+  console.error('Missing API key. Set DEEPSEEK_API_KEY or apiKey in ~/.ds-code/config.json or project .ds-code/settings.json.')
   process.exit(1)
 }
 
-const model = readOption('--model')
-const resume = args.includes('--resume')
-
-const positionalArgs = args.filter((arg, i) => {
-  if (arg.startsWith('--')) return false
-  if (i > 0 && args[i - 1] === '--model') return false
-  return true
-})
-const initialPrompt = positionalArgs.length > 0 ? positionalArgs.join(' ') : undefined
-
 render(
   React.createElement(App, {
-    apiKey,
-    ...(model ? { model } : {}),
-    ...(initialPrompt ? { initialPrompt } : {}),
-    resume,
+    apiKey: options.apiKey,
+    ...(options.model ? { model: options.model } : {}),
+    ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+    ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
+    resume: options.resume,
   }),
   { exitOnCtrlC: false }
 )
-
-function readOption(name: string): string | undefined {
-  const index = args.indexOf(name)
-  if (index === -1) return undefined
-  return args[index + 1]
-}

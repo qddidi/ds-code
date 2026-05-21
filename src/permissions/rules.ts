@@ -6,8 +6,10 @@ export interface PermissionRule {
 }
 
 const DANGEROUS_BASH_PATTERNS = [
-  /\brm\s+(-[\w-]*r[\w-]*f|-rf|-fr)\s+(\/|\*|~)/i,
+  /\brm\s+(-[\w-]*r[\w-]*f|-rf|-fr)\s+(\/|\*|~|\.)\s*($|[;&|])/i,
   /\brm\s+(-[\w-]*r|-r)\s+\//i,
+  /\bgit\s+reset\s+--hard\b/i,
+  /\bgit\s+clean\s+-[\w-]*f[\w-]*d[\w-]*\b/i,
   /\bdd\s+.*\bof=\/dev\//i,
   /:\(\)\s*\{\s*:\|:/,
 ]

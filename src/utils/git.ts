@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
+const GIT_TIMEOUT_MS = 5000
 
 export interface GitResult {
   ok: boolean
@@ -59,7 +60,7 @@ export async function getGitContext(cwd = process.cwd()): Promise<string> {
 
 export async function runGit(args: string[], cwd = process.cwd()): Promise<GitResult> {
   try {
-    const { stdout, stderr } = await execFileAsync('git', args, { cwd })
+    const { stdout, stderr } = await execFileAsync('git', args, { cwd, timeout: GIT_TIMEOUT_MS })
     return { ok: true, output: stdout, error: stderr || undefined }
   } catch (err) {
     const error = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string }

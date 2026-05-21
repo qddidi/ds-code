@@ -12,7 +12,11 @@ describe('bash tool', () => {
   })
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true })
+    try {
+      await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EBUSY') throw err
+    }
   })
 
   it('executes a simple command', async () => {
@@ -40,7 +44,7 @@ describe('bash tool', () => {
   })
 
   it('terminates commands that exceed timeout', async () => {
-    const result = await bashTool.execute({ command: 'node -e "while (true) {}"', cwd: tempDir, timeout_ms: 50 })
+    const result = await bashTool.execute({ command: 'node -e "setTimeout(() => {}, 10000)"', cwd: tempDir, timeout_ms: 50 })
 
     expect(result.isError).toBe(true)
     expect(result.content).toContain('timedOut=true')

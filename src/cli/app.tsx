@@ -20,6 +20,7 @@ import { bashTool } from '../tools/bash.js'
 import { PermissionManager } from '../permissions/manager.js'
 import { SessionStore, type SessionData } from '../core/session.js'
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
+import { resolveModelCommand } from './model.js'
 import { NAME, VERSION } from '../index.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 
@@ -411,12 +412,11 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
         break
       case '/model':
         if (parts[1]) {
-          try {
-            const newModel = clientRef.current?.setModel(parts[1])
-            setCommandOutput(`Switched to: ${newModel}`)
-          } catch (err) {
-            setCommandOutput(err instanceof Error ? err.message : String(err))
+          const result = resolveModelCommand(command)
+          if (result.model) {
+            clientRef.current?.setModel(result.model)
           }
+          setCommandOutput(result.message)
         } else {
           const current = clientRef.current?.getModel() ?? 'unknown'
           setCommandOutput(`Current model: ${current}`)

@@ -54,19 +54,31 @@ describe('PermissionManager', () => {
     const confirm = vi.fn()
     const manager = new PermissionManager({ allowedCommands: ['rm *'], confirm })
 
-    const result = await manager.check(bashTool, { command: 'rm -rf /' })
+    for (const command of ['rm -rf /', 'rm -rf .', 'git reset --hard HEAD', 'git clean -fdx']) {
+      const result = await manager.check(bashTool, { command })
+      expect(result.decision).toBe('deny')
+    }
 
-    expect(result.decision).toBe('deny')
     expect(confirm).not.toHaveBeenCalled()
   })
 
-  it('remembers allow always responses', async () => {
+  it('remembers allow always responses for non-bash tools', async () => {
+    const confirm = vi.fn(async () => 'allow_always' as const)
+    const manager = new PermissionManager({ confirm })
+
+    await expect(manager.check(writeTool, { file_path: 'a.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(writeTool, { file_path: 'b.ts', content: 'y' })).resolves.toMatchObject({ decision: 'allow' })
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('remembers allow always responses per bash command', async () => {
     const confirm = vi.fn(async () => 'allow_always' as const)
     const manager = new PermissionManager({ confirm })
 
     await expect(manager.check(bashTool, { command: 'ls src' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(bashTool, { command: 'ls src' })).resolves.toMatchObject({ decision: 'allow' })
     await expect(manager.check(bashTool, { command: 'git status' })).resolves.toMatchObject({ decision: 'allow' })
-    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledTimes(2)
   })
 
   it('applies deny before allowlist rules', async () => {

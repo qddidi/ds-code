@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, execFile } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
 
@@ -35,6 +35,10 @@ function normalizeTimeout(value: unknown): number {
 }
 
 function executeCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+  if (process.platform === 'win32') {
+    return executeCommandWithExecFile(command, cwd, timeoutMs, signal)
+  }
+
   return new Promise((resolveResult) => {
     if (signal?.aborted) {
       resolveResult({ content: formatResult('', '', null, false, true), isError: true })
@@ -45,6 +49,7 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
       cwd,
       shell: true,
       windowsHide: true,
+      detached: process.platform !== 'win32',
     })
 
     let stdout = ''
@@ -61,12 +66,35 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
       resolveResult(result)
     }
 
+    const stopChild = (): void => {
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGTERM')
+        } catch {
+          child.kill('SIGTERM')
+        }
+      } else {
+        child.kill('SIGTERM')
+      }
+    }
+
+    const forceStopChild = (): void => {
+      if (settled) return
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, 'SIGKILL')
+        } catch {
+          child.kill('SIGKILL')
+        }
+      } else {
+        child.kill('SIGKILL')
+      }
+    }
+
     const onAbort = (): void => {
       aborted = true
-      child.kill('SIGTERM')
-      setTimeout(() => {
-        if (!settled) child.kill('SIGKILL')
-      }, 100)
+      stopChild()
+      setTimeout(forceStopChild, 100)
     }
 
     if (signal) {
@@ -75,10 +103,8 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
 
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill('SIGTERM')
-      setTimeout(() => {
-        if (!settled) child.kill('SIGKILL')
-      }, 100)
+      stopChild()
+      setTimeout(forceStopChild, 100)
     }, timeoutMs)
 
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -103,6 +129,61 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
       })
     })
   })
+}
+
+function executeCommandWithExecFile(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
+  return new Promise((resolveResult) => {
+    if (signal?.aborted) {
+      resolveResult({ content: formatResult('', '', null, false, true), isError: true })
+      return
+    }
+
+    const child = execFile(command, {
+      cwd,
+      shell: true,
+      windowsHide: true,
+      timeout: timeoutMs,
+      killSignal: 'SIGTERM',
+      signal,
+    }, (err, stdout, stderr) => {
+      const aborted = signal?.aborted ?? false
+      const timedOut = isTimeoutError(err)
+      const exitCode = err ? getExitCode(err) : 0
+      const finish = (): void => {
+        resolveResult({
+          content: formatResult(String(stdout), String(stderr), exitCode, timedOut, aborted),
+          isError: timedOut || aborted || undefined,
+        })
+      }
+
+      if (timedOut && process.platform === 'win32') {
+        setTimeout(finish, 500)
+      } else {
+        finish()
+      }
+    })
+
+    child.on('error', (err) => {
+      const aborted = signal?.aborted ?? false
+      const timedOut = isTimeoutError(err)
+      resolveResult({
+        content: formatResult('', err.message, getExitCode(err), timedOut, aborted),
+        isError: true,
+      })
+    })
+  })
+}
+
+function isTimeoutError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'killed' in err && (err as { killed?: boolean }).killed === true
+}
+
+function getExitCode(err: unknown): number | null {
+  if (typeof err === 'object' && err !== null && 'code' in err) {
+    const code = (err as { code?: unknown }).code
+    return typeof code === 'number' ? code : null
+  }
+  return null
 }
 
 function formatResult(stdout: string, stderr: string, exitCode: number | null, timedOut: boolean, aborted: boolean): string {
