@@ -1,5 +1,4 @@
-import type { ChatMessage } from '../api/types.js'
-import type { DeepSeekClient } from '../api/deepseek.js'
+import type { ChatMessage, ToolDefinition } from '../api/types.js'
 import type { ToolRegistry } from '../tools/registry.js'
 import { ContextManager } from './context.js'
 import { systemMessage, userMessage, assistantMessage, toolResultMessage } from './message.js'
@@ -26,15 +25,23 @@ const DEFAULT_CONFIG: AgentConfig = {
   maxContextTokens: 64000,
 }
 
+export interface ChatClient {
+  chatStream(messages: ChatMessage[], callbacks: {
+    onContent?: (text: string) => void
+    onThinking?: (text: string) => void
+    onToolCallStart?: () => void
+  }, tools?: ToolDefinition[], signal?: AbortSignal): Promise<ChatMessage>
+}
+
 export class Agent {
-  private client: DeepSeekClient
+  private client: ChatClient
   private registry: ToolRegistry
   private config: AgentConfig
   private messages: ChatMessage[] = []
   private contextManager: ContextManager
 
   constructor(
-    client: DeepSeekClient,
+    client: ChatClient,
     registry: ToolRegistry,
     config: Partial<AgentConfig> = {},
   ) {

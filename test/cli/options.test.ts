@@ -6,13 +6,36 @@ describe('CLI options', () => {
   it('lets environment API key override config', () => {
     const options = resolveCliOptions([], { ...DEFAULT_CONFIG, apiKey: 'sk-config' }, { DEEPSEEK_API_KEY: 'sk-env' })
 
+    expect(options.provider).toBe('deepseek')
     expect(options.apiKey).toBe('sk-env')
   })
 
-  it('uses CLI model before config model', () => {
-    const options = resolveCliOptions(['--model', 'reasoner'], { ...DEFAULT_CONFIG, model: 'deepseek-v4-flash' }, {})
+  it('prefers OPENAI_API_KEY for OpenAI and custom providers', () => {
+    const openaiOptions = resolveCliOptions(['--provider', 'openai'], DEFAULT_CONFIG, {
+      DEEPSEEK_API_KEY: 'sk-deepseek',
+      OPENAI_API_KEY: 'sk-openai',
+    })
+    const customOptions = resolveCliOptions(['--provider', 'custom'], DEFAULT_CONFIG, {
+      DEEPSEEK_API_KEY: 'sk-deepseek',
+      OPENAI_API_KEY: 'sk-openai',
+    })
 
-    expect(options.model).toBe('reasoner')
+    expect(openaiOptions.provider).toBe('openai')
+    expect(openaiOptions.apiKey).toBe('sk-openai')
+    expect(customOptions.provider).toBe('custom')
+    expect(customOptions.apiKey).toBe('sk-openai')
+  })
+
+  it('uses CLI provider, model, and base URL before config', () => {
+    const options = resolveCliOptions([
+      '--provider', 'custom',
+      '--model', 'openai/gpt-4o',
+      '--base-url', 'https://relay.example.com',
+    ], { ...DEFAULT_CONFIG, model: 'deepseek-v4-flash' }, {})
+
+    expect(options.provider).toBe('custom')
+    expect(options.model).toBe('openai/gpt-4o')
+    expect(options.baseUrl).toBe('https://relay.example.com')
   })
 
   it('reads prompt and resume flag from args', () => {
@@ -24,6 +47,7 @@ describe('CLI options', () => {
 
   it('reads named options', () => {
     expect(readOption(['--model', 'pro'], '--model')).toBe('pro')
+    expect(readOption(['--base-url', 'https://relay.example.com'], '--base-url')).toBe('https://relay.example.com')
     expect(readOption([], '--model')).toBeUndefined()
   })
 })

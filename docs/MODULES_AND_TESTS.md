@@ -459,16 +459,18 @@
 
 ### 范围
 
-- `src/api/deepseek.ts` 支持模型切换
+- `src/api/deepseek.ts` 支持 DeepSeek/OpenAI/custom provider 与模型切换
 - `src/cli/model.ts` — /model 命令处理
-- 支持模型：deepseek-v4-pro（默认）、deepseek-v4-flash、deepseek-reasoner
+- DeepSeek 支持模型：deepseek-v4-pro（默认）、deepseek-v4-flash、deepseek-reasoner
+- OpenAI/custom provider 支持任意非空模型名，便于使用 GPT 和 OpenAI-compatible 中转站
 - 运行时切换命令 `/model`
 - `supportsTools()` 函数判断模型是否支持 function calling
 
 ### 完成标准
 
 - 默认使用 deepseek-v4-pro
-- 用户可通过配置或 `/model` 命令切换模型
+- 用户可通过配置、CLI 参数或 `/model` 命令切换模型
+- OpenAI/custom provider 可使用 gpt-* 或中转站模型别名
 - reasoner 模式下正确处理 reasoning_content 字段（单独存储并回传）
 - 不支持 function calling 的模型（reasoner）不传 tools 参数
 
@@ -480,7 +482,8 @@
 | 切换模型 | 单元 | /model reasoner 后请求使用 deepseek-reasoner |
 | reasoner 响应解析 | 单元 | 正确提取 reasoning_content 和 content |
 | reasoner 无 tools | 单元 | 切换到 reasoner 时不传 tools 参数 |
-| 无效模型名 | 单元 | 返回错误提示可用模型列表 |
+| OpenAI/custom 模型 | 单元 | provider=openai/custom 时允许 gpt-* 或中转站模型别名 |
+| 无效模型名 | 单元 | DeepSeek 返回可用模型列表，OpenAI/custom 拒绝空模型名 |
 | supportsTools | 单元 | v4-pro/v4-flash 返回 true，reasoner 返回 false |
 
 ---

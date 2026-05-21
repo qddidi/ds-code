@@ -1,6 +1,8 @@
+import type { Provider } from '../api/types.js'
 import type { DsCodeConfig } from '../config/schema.js'
 
 export interface CliOptions {
+  provider: Provider
   apiKey?: string
   model?: string
   baseUrl?: string
@@ -9,15 +11,18 @@ export interface CliOptions {
 }
 
 export function resolveCliOptions(args: string[], config: DsCodeConfig, env: NodeJS.ProcessEnv): CliOptions {
-  const apiKey = env.DEEPSEEK_API_KEY ?? config.apiKey
+  const provider = (readOption(args, '--provider') ?? config.provider) as Provider
+  const apiKey = resolveApiKey(provider, config, env)
   const model = readOption(args, '--model') ?? config.model
+  const baseUrl = readOption(args, '--base-url') ?? config.baseUrl
   const resume = args.includes('--resume')
   const initialPrompt = readInitialPrompt(args)
 
   return {
+    provider,
     ...(apiKey ? { apiKey } : {}),
     model,
-    baseUrl: config.baseUrl,
+    baseUrl,
     ...(initialPrompt ? { initialPrompt } : {}),
     resume,
   }
@@ -29,10 +34,15 @@ export function readOption(args: string[], name: string): string | undefined {
   return args[index + 1]
 }
 
+function resolveApiKey(provider: Provider, config: DsCodeConfig, env: NodeJS.ProcessEnv): string | undefined {
+  if (provider === 'openai' || provider === 'custom') return env.OPENAI_API_KEY ?? env.DEEPSEEK_API_KEY ?? config.apiKey
+  return env.DEEPSEEK_API_KEY ?? env.OPENAI_API_KEY ?? config.apiKey
+}
+
 function readInitialPrompt(args: string[]): string | undefined {
   const positionalArgs = args.filter((arg, i) => {
     if (arg.startsWith('--')) return false
-    if (i > 0 && args[i - 1] === '--model') return false
+    if (i > 0 && (args[i - 1] === '--model' || args[i - 1] === '--provider' || args[i - 1] === '--base-url')) return false
     return true
   })
 

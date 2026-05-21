@@ -1,8 +1,10 @@
 import {
+  type ChatClientConfig,
   type ChatCompletionRequest,
   type ChatCompletionResponse,
   type ChatMessage,
   type DeepSeekClientConfig,
+  type Provider,
   type StreamChunk,
   type ToolCall,
   type ToolDefinition,
@@ -14,7 +16,8 @@ import {
 import { parseSSEStream } from './stream.js'
 import { withRetry } from './retry.js'
 
-const DEFAULT_CONFIG: DeepSeekClientConfig = {
+const DEFAULT_CONFIG: ChatClientConfig = {
+  provider: 'deepseek',
   baseUrl: 'https://api.deepseek.com',
   apiKey: '',
   model: 'deepseek-v4-pro',
@@ -24,18 +27,31 @@ const DEFAULT_CONFIG: DeepSeekClientConfig = {
 }
 
 export type DeepSeekModel = 'deepseek-v4-pro' | 'deepseek-v4-flash' | 'deepseek-reasoner'
+export type ChatModel = DeepSeekModel | string
 
 export const AVAILABLE_MODELS: DeepSeekModel[] = ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-reasoner']
 
-export function normalizeModel(model: string): DeepSeekModel | null {
-  if (model === 'pro' || model === 'chat' || model === 'deepseek-chat' || model === 'deepseek-v4-pro') return 'deepseek-v4-pro'
-  if (model === 'flash' || model === 'deepseek-v4-flash') return 'deepseek-v4-flash'
-  if (model === 'reasoner' || model === 'deepseek-reasoner') return 'deepseek-reasoner'
+export function normalizeProvider(provider: string | undefined): Provider {
+  if (!provider) return 'deepseek'
+  if (provider === 'deepseek' || provider === 'openai' || provider === 'custom') {
+    return provider
+  }
+  throw new Error('Invalid provider. Available providers: deepseek, openai, custom')
+}
+
+export function normalizeModel(model: string, provider: Provider = 'deepseek'): string | null {
+  const trimmed = model.trim()
+  if (!trimmed) return null
+  if (provider !== 'deepseek') return trimmed
+  if (trimmed === 'pro' || trimmed === 'chat' || trimmed === 'deepseek-chat' || trimmed === 'deepseek-v4-pro') return 'deepseek-v4-pro'
+  if (trimmed === 'flash' || trimmed === 'deepseek-v4-flash') return 'deepseek-v4-flash'
+  if (trimmed === 'reasoner' || trimmed === 'deepseek-reasoner') return 'deepseek-reasoner'
   return null
 }
 
-export function supportsTools(model: string): boolean {
-  const normalized = normalizeModel(model)
+export function supportsTools(model: string, provider: Provider = 'deepseek'): boolean {
+  if (provider !== 'deepseek') return true
+  const normalized = normalizeModel(model, provider)
   return normalized === 'deepseek-v4-pro' || normalized === 'deepseek-v4-flash'
 }
 
@@ -49,25 +65,34 @@ export interface StreamCallbacks {
 }
 
 export class DeepSeekClient {
-  private config: DeepSeekClientConfig
+  private config: ChatClientConfig
 
   constructor(config: Partial<DeepSeekClientConfig> & { apiKey: string }) {
     this.config = { ...DEFAULT_CONFIG, ...config }
-    const model = normalizeModel(this.config.model)
+    this.config.provider = normalizeProvider(this.config.provider)
+    const model = normalizeModel(this.config.model, this.config.provider)
     if (!model) {
-      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}`)
+      throw new Error(modelErrorMessage(this.config.provider))
     }
     this.config.model = model
   }
 
-  getModel(): DeepSeekModel {
-    return this.config.model as DeepSeekModel
+  getProvider(): Provider {
+    return this.config.provider
   }
 
-  setModel(modelName: string): DeepSeekModel {
-    const model = normalizeModel(modelName)
+  getBaseUrl(): string {
+    return this.config.baseUrl
+  }
+
+  getModel(): string {
+    return this.config.model
+  }
+
+  setModel(modelName: string): string {
+    const model = normalizeModel(modelName, this.config.provider)
     if (!model) {
-      throw new Error(`Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}`)
+      throw new Error(modelErrorMessage(this.config.provider))
     }
     this.config.model = model
     return model
@@ -85,7 +110,7 @@ export class DeepSeekClient {
       stream: false,
     }
 
-    if (supportsTools(this.config.model) && tools && tools.length > 0) {
+    if (supportsTools(this.config.model, this.config.provider) && tools && tools.length > 0) {
       body.tools = tools
       body.tool_choice = 'auto'
     }
@@ -108,7 +133,7 @@ export class DeepSeekClient {
       stream: true,
     }
 
-    if (supportsTools(this.config.model) && tools && tools.length > 0) {
+    if (supportsTools(this.config.model, this.config.provider) && tools && tools.length > 0) {
       body.tools = tools
       body.tool_choice = 'auto'
     }
@@ -264,6 +289,13 @@ export class DeepSeekClient {
 
     return response
   }
+}
+
+function modelErrorMessage(provider: Provider): string {
+  if (provider === 'deepseek') {
+    return `Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}`
+  }
+  return 'Invalid model. Model must be a non-empty string.'
 }
 
 function normalizeReasonerResponse(response: ChatCompletionResponse): ChatCompletionResponse {

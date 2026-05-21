@@ -8,7 +8,8 @@ import { ToolCallDisplay } from './components/tool-call.js'
 import { PermissionPrompt } from './components/permission-prompt.js'
 import { Autocomplete } from './components/autocomplete.js'
 import { Agent } from '../core/agent.js'
-import { DeepSeekClient, AVAILABLE_MODELS, type DeepSeekModel } from '../api/deepseek.js'
+import { DeepSeekClient, AVAILABLE_MODELS } from '../api/deepseek.js'
+import type { Provider } from '../api/types.js'
 import { ToolRegistry } from '../tools/registry.js'
 import { readTool } from '../tools/read.js'
 import { writeTool } from '../tools/write.js'
@@ -25,6 +26,7 @@ import { NAME, VERSION } from '../index.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 
 export interface AppProps {
+  provider?: Provider
   apiKey: string
   model?: string
   baseUrl?: string
@@ -53,7 +55,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -83,7 +85,7 @@ export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resum
 
   React.useEffect(() => {
     const init = async (): Promise<void> => {
-      const clientConfig: { apiKey: string; model?: string; baseUrl?: string } = { apiKey }
+      const clientConfig: { provider: Provider; apiKey: string; model?: string; baseUrl?: string } = { provider, apiKey }
       if (model) clientConfig.model = model
       if (baseUrl) clientConfig.baseUrl = baseUrl
       const client = new DeepSeekClient(clientConfig)
@@ -412,16 +414,22 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
         break
       case '/model':
         if (parts[1]) {
-          const result = resolveModelCommand(command)
+          const currentProvider = clientRef.current?.getProvider() ?? provider
+          const result = resolveModelCommand(command, currentProvider)
           if (result.model) {
             clientRef.current?.setModel(result.model)
           }
           setCommandOutput(result.message)
         } else {
           const current = clientRef.current?.getModel() ?? 'unknown'
-          setCommandOutput(`Current model: ${current}`)
-          setModelPickerIdx(AVAILABLE_MODELS.indexOf(current as DeepSeekModel))
-          setModelPicker(true)
+          const currentProvider = clientRef.current?.getProvider() ?? provider
+          if (currentProvider === 'deepseek') {
+            setCommandOutput(`Current model: ${current}`)
+            setModelPickerIdx(Math.max(0, AVAILABLE_MODELS.indexOf(current as typeof AVAILABLE_MODELS[number])))
+            setModelPicker(true)
+          } else {
+            setCommandOutput(`Current model: ${current}\nUse /model <name> to switch models.`)
+          }
         }
         break
       case '/status': {
@@ -429,6 +437,8 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
         const tokens = estimateMessagesTokens(msgs)
         const toolCount = registryRef.current?.list().length ?? 0
         setCommandOutput([
+          `Provider: ${clientRef.current?.getProvider() ?? provider}`,
+          `Base URL: ${clientRef.current?.getBaseUrl() ?? baseUrl ?? 'unknown'}`,
           `Model: ${clientRef.current?.getModel() ?? 'unknown'}`,
           `Working directory: ${process.cwd()}`,
           `Session: ${sessionRef.current?.id ?? 'none'}`,
@@ -460,6 +470,8 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
           `Node:      ${process.version}`,
           `Platform:  ${process.platform} ${process.arch}`,
           `API Key:   ${apiKey ? '✓ set' : '✗ missing'}`,
+          `Provider:  ${clientRef.current?.getProvider() ?? provider}`,
+          `Base URL:  ${clientRef.current?.getBaseUrl() ?? baseUrl ?? 'unknown'}`,
           `Model:     ${clientRef.current?.getModel() ?? 'unknown'}`,
           `CWD:       ${process.cwd()}`,
           `Session:   ${sessionRef.current?.id ?? 'none'}`,

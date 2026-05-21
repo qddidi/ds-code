@@ -65,6 +65,7 @@ export function mergeConfig(base: DsCodeConfig, override: PartialDsCodeConfig): 
 
 export function validateConfig(config: DsCodeConfig): DsCodeConfig {
   const fields: Array<[keyof DsCodeConfig, string]> = [
+    ['provider', 'string'],
     ['apiKey', 'string'],
     ['baseUrl', 'string'],
     ['model', 'string'],
@@ -78,6 +79,10 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
     if (value !== undefined && typeof value !== type) {
       throw new ConfigError(`Invalid config field "${field}": expected ${type}`)
     }
+  }
+
+  if (config.provider !== 'deepseek' && config.provider !== 'openai' && config.provider !== 'custom') {
+    throw new ConfigError('Invalid config field "provider": expected deepseek, openai, or custom')
   }
 
   if (!config.permissions || typeof config.permissions !== 'object') {
@@ -97,6 +102,7 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
 
 function pickScalarFields(config: PartialDsCodeConfig): PartialDsCodeConfig {
   const result: PartialDsCodeConfig = {}
+  if ('provider' in config) result.provider = config.provider
   if ('apiKey' in config) result.apiKey = config.apiKey
   if ('baseUrl' in config) result.baseUrl = config.baseUrl
   if ('model' in config) result.model = config.model

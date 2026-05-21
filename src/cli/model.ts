@@ -1,25 +1,28 @@
-import { AVAILABLE_MODELS, normalizeModel, type DeepSeekModel } from '../api/deepseek.js'
+import { AVAILABLE_MODELS, normalizeModel } from '../api/deepseek.js'
+import type { Provider } from '../api/types.js'
 
 export interface ModelCommandResult {
   ok: boolean
   message: string
-  model?: DeepSeekModel
+  model?: string
 }
 
-export function modelCommand(input: string): string {
-  const result = resolveModelCommand(input)
+export function modelCommand(input: string, provider: Provider = 'deepseek'): string {
+  const result = resolveModelCommand(input, provider)
   return result.model ?? result.message
 }
 
-export function resolveModelCommand(input: string): ModelCommandResult {
+export function resolveModelCommand(input: string, provider: Provider = 'deepseek'): ModelCommandResult {
   const modelName = input.trim().split(/\s+/)[1]
   if (!modelName) {
-    return { ok: false, message: `Available models: ${AVAILABLE_MODELS.join(', ')}` }
+    if (provider === 'deepseek') return { ok: false, message: `Available models: ${AVAILABLE_MODELS.join(', ')}` }
+    return { ok: false, message: 'Use /model <name> to switch models.' }
   }
 
-  const model = normalizeModel(modelName)
+  const model = normalizeModel(modelName, provider)
   if (!model) {
-    return { ok: false, message: `Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}` }
+    if (provider === 'deepseek') return { ok: false, message: `Invalid model. Available models: ${AVAILABLE_MODELS.join(', ')}` }
+    return { ok: false, message: 'Invalid model. Model must be a non-empty string.' }
   }
 
   return { ok: true, model, message: `Switched to: ${model}` }

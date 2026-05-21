@@ -1,4 +1,7 @@
+import type { Provider } from '../api/types.js'
+
 export interface DsCodeConfig {
+  provider: Provider
   apiKey?: string
   baseUrl: string
   model: string
@@ -11,6 +14,7 @@ export interface DsCodeConfig {
 }
 
 export type PartialDsCodeConfig = Partial<{
+  provider: Provider
   apiKey: string
   baseUrl: string
   model: string

@@ -17,7 +17,7 @@ if (args.includes('--version') || args.includes('-v')) {
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`${NAME} v${VERSION}
 
-AI-powered coding assistant CLI using DeepSeek API
+AI-powered coding assistant CLI using DeepSeek, OpenAI, or OpenAI-compatible APIs
 
 Usage:
   ds-code [options] [prompt]
@@ -25,14 +25,18 @@ Usage:
 Options:
   -v, --version    Show version
   -h, --help       Show help
-  --model <model>  Model to use (deepseek-v4-pro, deepseek-v4-flash, deepseek-reasoner)
-  --resume         Resume last session
+  --model <model>       Model to use, e.g. deepseek-v4-pro or gpt-4o
+  --provider <provider> deepseek, openai, or custom
+  --base-url <url>      OpenAI-compatible API base URL
+  --resume              Resume last session
 
 Examples:
   ds-code                     Start interactive session
   ds-code "fix the bug"       Start with initial prompt
-  ds-code --model reasoner    Use DeepSeek reasoner model
-  ds-code --resume            Resume previous conversation`)
+  ds-code --model reasoner                         Use DeepSeek reasoner model
+  ds-code --provider openai --model gpt-4o         Use OpenAI
+  ds-code --provider custom --base-url <url>       Use an OpenAI-compatible relay
+  ds-code --resume                                 Resume previous conversation`)
   process.exit(0)
 }
 
@@ -40,12 +44,13 @@ const config = await loadConfig()
 const options = resolveCliOptions(args, config, process.env)
 
 if (!options.apiKey) {
-  console.error('Missing API key. Set DEEPSEEK_API_KEY or apiKey in ~/.ds-code/config.json or project .ds-code/settings.json.')
+  console.error('Missing API key. Set OPENAI_API_KEY, DEEPSEEK_API_KEY, or apiKey in ~/.ds-code/config.json or project .ds-code/settings.json.')
   process.exit(1)
 }
 
 render(
   React.createElement(App, {
+    provider: options.provider,
     apiKey: options.apiKey,
     ...(options.model ? { model: options.model } : {}),
     ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),

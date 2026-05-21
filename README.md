@@ -1,6 +1,6 @@
 # ds-code
 
-基于 DeepSeek API 的 AI 编程助手 CLI。在终端中与 AI 对话，完成代码读写、搜索、命令执行等任务。
+基于 DeepSeek、OpenAI 或 OpenAI-compatible API 的 AI 编程助手 CLI。在终端中与 AI 对话，完成代码读写、搜索、命令执行等任务。
 
 ## 安装
 
@@ -10,16 +10,32 @@ npm install -g @mrdistore/ds-code
 
 ## 配置
 
-设置 DeepSeek API Key（在 [platform.deepseek.com](https://platform.deepseek.com) 获取）：
+设置 API Key：
 
 ```bash
+# DeepSeek
 export DEEPSEEK_API_KEY=sk-xxx
+
+# OpenAI
+export OPENAI_API_KEY=sk-xxx
 ```
 
 Windows PowerShell：
 
 ```powershell
 $env:DEEPSEEK_API_KEY="sk-xxx"
+$env:OPENAI_API_KEY="sk-xxx"
+```
+
+OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
+
+```json
+{
+  "provider": "custom",
+  "baseUrl": "https://relay.example.com",
+  "apiKey": "sk-xxx",
+  "model": "openai/gpt-4o"
+}
 ```
 
 ## 使用
@@ -32,7 +48,13 @@ ds-code
 ds-code "帮我看看这个项目的结构"
 
 # 指定模型
-ds-code --model reasoner
+ ds-code --model reasoner
+
+# 使用 OpenAI
+ ds-code --provider openai --model gpt-4o
+
+# 使用 OpenAI-compatible 中转站
+ ds-code --provider custom --base-url https://relay.example.com --model openai/gpt-4o
 
 # 恢复上次会话
 ds-code --resume
@@ -43,7 +65,7 @@ ds-code --resume
 - **交互式终端 UI** — 流式输出，实时工具调用状态显示
 - **Agent 工具链** — 自动读写文件、搜索代码、执行命令，完成复杂任务
 - **权限控制** — 只读操作自动放行，写入和命令执行需确认
-- **多模型切换** — deepseek-v4-pro / deepseek-v4-flash / deepseek-reasoner
+- **多模型切换** — DeepSeek 模型、OpenAI GPT 模型、OpenAI-compatible 中转站模型
 - **上下文管理** — 长对话自动压缩，会话持久化保存与恢复
 - **斜杠命令** — 输入 `/` 自动补全，12 个内置命令
 
@@ -57,7 +79,7 @@ ds-code --resume
 | `/clear` | 清空对话 |
 | `/exit` | 退出 |
 | `/model` | 交互式切换模型 |
-| `/model <name>` | 直接切换（pro / flash / reasoner） |
+| `/model <name>` | 直接切换（如 reasoner / gpt-4o / 中转站模型别名） |
 | `/status` | 查看状态信息 |
 | `/tools` | 列出可用工具 |
 | `/cost` | token 用量估算 |
@@ -92,7 +114,7 @@ ds-code --resume
 ## 环境要求
 
 - Node.js >= 20
-- DeepSeek API Key
+- DeepSeek API Key、OpenAI API Key 或 OpenAI-compatible 中转站 Key
 
 ## 开发
 

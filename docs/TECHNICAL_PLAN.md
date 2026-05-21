@@ -152,15 +152,16 @@ ds-code/
 
 Agent 采用循环架构：每次 API 返回如果包含 tool_calls，则执行对应工具，将结果追加到消息列表，再次请求 API，直到返回纯文本响应。
 
-### 5.2 DeepSeek API 集成
+### 5.2 OpenAI-compatible API 集成
 
-DeepSeek API 兼容 OpenAI 格式，关键参数：
+DeepSeek、OpenAI 与中转站统一走 OpenAI Chat Completions 兼容格式，关键参数：
 
 ```typescript
-interface DeepSeekConfig {
-  baseUrl: string;       // https://api.deepseek.com
+interface ChatClientConfig {
+  provider: 'deepseek' | 'openai' | 'custom';
+  baseUrl: string;       // https://api.deepseek.com / OpenAI / 中转站地址
   apiKey: string;        // 用户配置
-  model: string;         // deepseek-v4-pro / deepseek-v4-flash / deepseek-reasoner
+  model: string;         // deepseek-v4-pro / deepseek-reasoner / gpt-4o / 中转站模型别名
   maxTokens: number;     // 输出 token 上限（默认 4096）
   temperature: number;   // 默认 0.2
   timeout: number;       // 请求超时（默认 120000ms）
@@ -168,8 +169,8 @@ interface DeepSeekConfig {
 }
 ```
 
-- 使用 `deepseek-v4-pro` 作为默认模型（支持 function calling）
-- `deepseek-v4-flash` 作为快速模型
+- 默认 provider 为 `deepseek`，默认模型 `deepseek-v4-pro`
+- `openai` / `custom` provider 允许任意非空模型名，支持 OpenAI-compatible 中转站
 - 支持流式输出（SSE），逐字渲染到终端
 - 支持 `deepseek-reasoner`（R1）用于复杂推理场景（reasoning_content 单独处理）
 - 网络错误和限流自动指数退避重试（src/api/retry.ts）
@@ -204,7 +205,7 @@ interface Tool {
 
 - 使用自研 token 估算算法（基于字符类型估算，CJK 字符 ~1.5 token/字，英文 ~0.25 token/字符）
 - 当上下文接近模型限制（默认 64K 的 80%）时，自动压缩早期对话
-- 压缩策略：用 DeepSeek API 对早期消息生成摘要，替换原始消息，保留最近 4 条消息
+- 压缩策略：用当前配置的 OpenAI-compatible API 对早期消息生成摘要，替换原始消息，保留最近 4 条消息
 
 ## 6. DeepSeek API 与 Claude API 差异处理
 
@@ -223,6 +224,7 @@ interface Tool {
 
 ```json
 {
+  "provider": "deepseek",
   "apiKey": "sk-xxx",
   "model": "deepseek-v4-pro",
   "baseUrl": "https://api.deepseek.com",

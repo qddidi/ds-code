@@ -34,6 +34,7 @@ describe('config loader', () => {
 
     const config = await loadConfig({ homeDir, projectDir })
 
+    expect(config.provider).toBe('deepseek')
     expect(config.apiKey).toBe('sk-test')
     expect(config.model).toBe('deepseek-reasoner')
     expect(config.baseUrl).toBe(DEFAULT_CONFIG.baseUrl)
@@ -42,12 +43,14 @@ describe('config loader', () => {
   it('lets project config override global config', async () => {
     await mkdir(join(homeDir, '.ds-code'), { recursive: true })
     await mkdir(join(projectDir, '.ds-code'), { recursive: true })
-    await writeFile(join(homeDir, '.ds-code', 'config.json'), JSON.stringify({ model: 'deepseek-v4-pro', temperature: 0.1 }))
-    await writeFile(join(projectDir, '.ds-code', 'settings.json'), JSON.stringify({ model: 'deepseek-reasoner' }))
+    await writeFile(join(homeDir, '.ds-code', 'config.json'), JSON.stringify({ provider: 'openai', model: 'gpt-4o', temperature: 0.1 }))
+    await writeFile(join(projectDir, '.ds-code', 'settings.json'), JSON.stringify({ provider: 'custom', baseUrl: 'https://relay.example.com', model: 'openai/gpt-4o-mini' }))
 
     const config = await loadConfig({ homeDir, projectDir })
 
-    expect(config.model).toBe('deepseek-reasoner')
+    expect(config.provider).toBe('custom')
+    expect(config.baseUrl).toBe('https://relay.example.com')
+    expect(config.model).toBe('openai/gpt-4o-mini')
     expect(config.temperature).toBe(0.1)
   })
 
@@ -81,6 +84,12 @@ describe('config loader', () => {
   it('throws for invalid field types', () => {
     expect(() => validateConfig({ ...DEFAULT_CONFIG, temperature: 'abc' } as never)).toThrow(
       'Invalid config field "temperature": expected number',
+    )
+  })
+
+  it('throws for invalid provider names', () => {
+    expect(() => validateConfig({ ...DEFAULT_CONFIG, provider: 'bad' } as never)).toThrow(
+      'Invalid config field "provider"',
     )
   })
 

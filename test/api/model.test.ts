@@ -113,6 +113,41 @@ describe('model support', () => {
     expect(body.tool_choice).toBeUndefined()
   })
 
+  it('supports OpenAI and custom model names', async () => {
+    const fetchMock = mockFetchResponse(REASONER_RESPONSE)
+    globalThis.fetch = fetchMock
+    const client = new DeepSeekClient({
+      provider: 'custom',
+      apiKey: 'sk-relay',
+      baseUrl: 'https://relay.example.com',
+      model: 'openai/gpt-4o',
+    })
+
+    await client.chat([{ role: 'user', content: 'hi' }], [{
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read file',
+        parameters: { type: 'object', properties: {} },
+      },
+    }])
+
+    const [url, options] = fetchMock.mock.calls[0]!
+    const body = JSON.parse(options.body)
+    expect(client.getProvider()).toBe('custom')
+    expect(client.getBaseUrl()).toBe('https://relay.example.com')
+    expect(body.model).toBe('openai/gpt-4o')
+    expect(body.tools).toBeDefined()
+    expect(url).toBe('https://relay.example.com/v1/chat/completions')
+    expect(supportsTools('gpt-4o', 'openai')).toBe(true)
+    expect(normalizeModel('gpt-4o', 'openai')).toBe('gpt-4o')
+    expect(resolveModelCommand('/model gpt-4o', 'openai')).toEqual({
+      ok: true,
+      model: 'gpt-4o',
+      message: 'Switched to: gpt-4o',
+    })
+  })
+
   it('reports invalid model names with available models', () => {
     expect(normalizeModel('bad-model')).toBeNull()
     expect(supportsTools('deepseek-reasoner')).toBe(false)

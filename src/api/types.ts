@@ -84,7 +84,10 @@ export interface StreamChunk {
   }[]
 }
 
-export interface DeepSeekClientConfig {
+export type Provider = 'deepseek' | 'openai' | 'custom'
+
+export interface ChatClientConfig {
+  provider: Provider
   baseUrl: string
   apiKey: string
   model: string
@@ -92,6 +95,8 @@ export interface DeepSeekClientConfig {
   temperature: number
   timeout: number
 }
+
+export type DeepSeekClientConfig = ChatClientConfig
 
 export class ApiError extends Error {
   constructor(
