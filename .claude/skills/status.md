@@ -8,7 +8,7 @@
 
 ## 执行步骤
 
-1. 读取 MODULES_AND_TESTS.md 获取模块列表
+1. 读取 docs/MODULES_AND_TESTS.md 获取模块列表
 2. 逐个检查每个模块的源文件是否存在
 3. 检查每个模块的测试文件是否存在
 4. 运行 `pnpm test --reporter=verbose 2>&1 | tail -30` 获取测试状态

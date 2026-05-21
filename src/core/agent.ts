@@ -13,6 +13,7 @@ export interface AgentConfig {
 export interface AgentCallbacks {
   onContent?: (text: string) => void
   onThinking?: (text: string) => void
+  onToolCallStart?: () => void
   onToolCall?: (name: string, args: string) => void
   onToolResult?: (name: string, result: string, isError: boolean) => void
   onMaxIterations?: () => void
@@ -21,7 +22,7 @@ export interface AgentCallbacks {
 
 const DEFAULT_CONFIG: AgentConfig = {
   systemPrompt: 'You are a helpful coding assistant.',
-  maxIterations: 20,
+  maxIterations: 50,
   maxContextTokens: 64000,
 }
 
@@ -119,6 +120,7 @@ export class Agent {
         {
           onContent: (chunk) => { callbacks.onContent?.(chunk) },
           onThinking: (chunk) => { callbacks.onThinking?.(chunk) },
+          onToolCallStart: () => { callbacks.onToolCallStart?.() },
         },
         this.registry.toToolDefinitions(),
         signal,
@@ -129,6 +131,12 @@ export class Agent {
       this.contextManager.addMessage(assistantMsg)
 
       if (!message.tool_calls || message.tool_calls.length === 0) {
+        if (message.finish_reason === 'length') {
+          const continueMsg = userMessage('[System: Your response was truncated due to length. Continue from where you left off.]')
+          this.messages.push(continueMsg)
+          this.contextManager.addMessage(continueMsg)
+          continue
+        }
         return message.content ?? ''
       }
 

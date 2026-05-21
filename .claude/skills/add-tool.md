@@ -16,7 +16,7 @@
 6. 在 registry 中注册该工具
 7. 编写对应测试文件 test/tools/<工具名>.test.ts
 8. 运行 `pnpm build` 和 `pnpm test` 确认通过
-9. 更新 MODULES_AND_TESTS.md 中的工具列表
+9. 更新 docs/MODULES_AND_TESTS.md 中的工具列表
 
 ## 约束
 

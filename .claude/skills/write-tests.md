@@ -8,7 +8,7 @@
 
 ## 执行步骤
 
-1. 读取 MODULES_AND_TESTS.md，找到对应模块的测试表
+1. 读取 docs/MODULES_AND_TESTS.md，找到对应模块的测试表
 2. 检查模块源码是否已实现（读取对应文件）
 3. 在 test/ 目录下创建对应测试文件（如 test/tools/read.test.ts）
 4. 按照测试表逐条实现测试用例，使用 vitest

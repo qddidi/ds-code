@@ -92,7 +92,9 @@ export function App({ apiKey, model, baseUrl, systemPrompt, initialPrompt, resum
 
 Working directory: ${cwd}
 
-You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.`
+You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.
+
+IMPORTANT: When working on a task, complete it fully before responding. Do not stop in the middle to give progress updates. Keep using tools until the task is done, then provide a final summary.`
 
       const registry = new ToolRegistry()
       registry.register(readTool)
@@ -319,6 +321,14 @@ You have tools to read, write, edit, list, search files, and execute shell comma
             bufferRef.current += chunk
           },
           onThinking: () => {
+            setStatus('thinking')
+          },
+          onToolCallStart: () => {
+            if (bufferRef.current) {
+              setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+              bufferRef.current = ''
+              setStreamingText('')
+            }
             setStatus('thinking')
           },
           onToolCall: (name, args) => {

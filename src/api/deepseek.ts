@@ -18,7 +18,7 @@ const DEFAULT_CONFIG: DeepSeekClientConfig = {
   baseUrl: 'https://api.deepseek.com',
   apiKey: '',
   model: 'deepseek-v4-pro',
-  maxTokens: 8192,
+  maxTokens: 16384,
   temperature: 0,
   timeout: 60000,
 }
@@ -42,6 +42,7 @@ export function supportsTools(model: string): boolean {
 export interface StreamCallbacks {
   onContent?: (text: string) => void
   onThinking?: (text: string) => void
+  onToolCallStart?: () => void
   onToolCall?: (toolCall: ToolCall) => void
   onDone?: (message: ChatMessage) => void
   onError?: (error: Error) => void
@@ -122,6 +123,7 @@ export class DeepSeekClient {
   ): Promise<ChatMessage> {
     let content = ''
     let reasoningContent = ''
+    let finishReason: string | null = null
     const toolCalls: Map<number, ToolCall> = new Map()
 
     for await (const event of parseSSEStream(response)) {
@@ -134,7 +136,12 @@ export class DeepSeekClient {
 
       if (event.type === 'chunk') {
         const chunk: StreamChunk = event.data
-        const delta = chunk.choices[0]?.delta
+        const choice = chunk.choices[0]
+        const delta = choice?.delta
+
+        if (choice?.finish_reason) {
+          finishReason = choice.finish_reason
+        }
 
         if (delta?.content) {
           content += delta.content
@@ -147,6 +154,9 @@ export class DeepSeekClient {
         }
 
         if (delta?.tool_calls) {
+          if (toolCalls.size === 0) {
+            callbacks.onToolCallStart?.()
+          }
           for (const tc of delta.tool_calls) {
             const existing = toolCalls.get(tc.index)
             if (existing) {
@@ -171,6 +181,7 @@ export class DeepSeekClient {
     const message: ChatMessage = {
       role: 'assistant',
       content: content || null,
+      finish_reason: finishReason,
     }
 
     if (reasoningContent) {
