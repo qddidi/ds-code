@@ -551,7 +551,7 @@ pnpm build
 | 长上下文成本升高 | 延迟增加或超限 | token 估算与自动压缩 |
 | 用户误选 always allow | 后续操作风险增加 | dangerous command 黑名单优先，提示展示关键参数 |
 | Windows shell 差异 | 命令行为不一致 | 测试覆盖 Windows 环境，路径处理用 Node API |
-| 文档和实现漂移 | 后续开发误判状态 | 以 `docs/PROJECT_PLAN.md` 和测试结果作为状态源，定期更新 |
+| 文档和实现漂移 | 后续开发误判状态 | 以拆分后的 `docs/implementation-status.md`、`docs/testing.md` 和测试结果作为状态源，定期更新 |
 
 ## 13. 后续优化需求
 

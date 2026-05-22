@@ -6,7 +6,14 @@ ds-code 是 Node.js + TypeScript 交互式 AI 编程助手 CLI，使用 DeepSeek
 
 ## 关键文档
 
-- `docs/PROJECT_PLAN.md`：技术方案、模块状态与测试计划。仅当实现状态、模块范围、命令或测试计划发生变化时同步更新。
+按需读取具体文档，不要默认读取 `docs/PROJECT_PLAN.md`；该文件仅作为保留的历史汇总。
+
+- `docs/architecture.md`：技术选型、核心架构、Agent/API/工具/权限/会话/CLI 设计。
+- `docs/implementation-status.md`：当前能力、模块状态和完成标准。
+- `docs/commands-and-config.md`：开发命令、slash commands、配置文件和环境变量。
+- `docs/testing.md`：单元、集成和手动验收测试计划。
+- `docs/roadmap-and-risks.md`：后续计划与风险应对。
+- `docs/project-structure.md`：目录结构快照。
 
 ## 开发命令
 
