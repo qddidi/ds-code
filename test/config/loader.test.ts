@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DEFAULT_CONFIG } from '../../src/config/defaults.js'
-import { ConfigError, loadConfig, mergeConfig, readConfigFile, rememberAllowedCommand, validateConfig } from '../../src/config/loader.js'
+import { ConfigError, loadAgentInstructions, loadConfig, mergeConfig, readConfigFile, rememberAllowedCommand, validateConfig } from '../../src/config/loader.js'
 
 describe('config loader', () => {
   let tempDir: string
@@ -102,6 +102,27 @@ describe('config loader', () => {
     const config = JSON.parse(content) as { permissions: { allowedCommands: string[] } }
 
     expect(config.permissions.allowedCommands).toEqual(['git status', 'pnpm test'])
+  })
+
+  it('loads nearest AGENTS.md from project ancestors', async () => {
+    const nestedDir = join(projectDir, 'packages', 'cli')
+    await mkdir(nestedDir, { recursive: true })
+    await writeFile(join(projectDir, 'AGENTS.md'), 'Use pnpm.\n')
+
+    await expect(loadAgentInstructions(nestedDir)).resolves.toBe('Use pnpm.\n')
+  })
+
+  it('returns empty instructions when AGENTS.md is missing', async () => {
+    await expect(loadAgentInstructions(projectDir)).resolves.toBe('')
+  })
+
+  it('prefers the nearest AGENTS.md', async () => {
+    const nestedDir = join(projectDir, 'packages', 'cli')
+    await mkdir(nestedDir, { recursive: true })
+    await writeFile(join(projectDir, 'AGENTS.md'), 'Root instructions.\n')
+    await writeFile(join(projectDir, 'packages', 'AGENTS.md'), 'Package instructions.\n')
+
+    await expect(loadAgentInstructions(nestedDir)).resolves.toBe('Package instructions.\n')
   })
 
   it('requires API key when requested', async () => {

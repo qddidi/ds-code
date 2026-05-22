@@ -23,7 +23,7 @@ import { SessionStore, type SessionData } from '../core/session.js'
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
 import { resolveModelCommand } from './model.js'
 import { NAME, VERSION } from '../index.js'
-import { rememberAllowedCommand } from '../config/loader.js'
+import { rememberAllowedCommand, loadAgentInstructions } from '../config/loader.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 
 export interface AppProps {
@@ -93,11 +93,14 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       const client = new DeepSeekClient(clientConfig)
 
       const cwd = process.cwd()
+      const agentInstructions = await loadAgentInstructions(cwd)
       const defaultPrompt = `You are ds-code, an AI coding assistant running in the user's terminal.
 
 Working directory: ${cwd}
 
-You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.
+${agentInstructions ? `Project instructions from AGENTS.md:\n${agentInstructions}\n` : ''}You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.
+
+When editing an existing file, prefer edit over shell commands. Before calling edit, read the file and copy old_string exactly from the current file content, including indentation, spaces, and line endings. Make old_string unique unless every match should be replaced with replace_all=true.
 
 IMPORTANT: When working on a task, complete it fully before responding. Do not stop in the middle to give progress updates. Keep using tools until the task is done, then provide a final summary.`
 

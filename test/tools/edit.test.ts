@@ -59,6 +59,7 @@ describe('edit_file tool', () => {
 
     expect(result.isError).toBe(true)
     expect(result.content).toContain('not found')
+    expect(result.content).toContain('copy old_string exactly')
   })
 
   it('returns error when multiple matches without replace_all', async () => {

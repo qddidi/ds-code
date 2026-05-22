@@ -6,8 +6,9 @@ export const editTool: Tool = {
   name: 'edit_file',
   description:
     'Perform exact string replacement in a file. ' +
-    'Finds old_string and replaces it with new_string. ' +
-    'Use replace_all=true to replace all occurrences.',
+    'Before using this tool, read the file and copy old_string exactly from the current file content. ' +
+    'old_string must include the exact indentation, spacing, and line endings, and must be unique unless replace_all=true. ' +
+    'Use replace_all=true only when every matching occurrence should be changed.',
   parameters: {
     type: 'object',
     properties: {
@@ -34,7 +35,12 @@ export const editTool: Tool = {
     }
 
     if (!content.includes(oldString)) {
-      return { content: `old_string not found in ${filePath}`, isError: true }
+      return {
+        content:
+          `old_string not found in ${filePath}. ` +
+          'Read the file again and copy old_string exactly, including indentation, spaces, and line endings.',
+        isError: true,
+      }
     }
 
     if (!replaceAll) {

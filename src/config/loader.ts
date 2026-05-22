@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, parse, resolve } from 'node:path'
 import { DEFAULT_CONFIG } from './defaults.js'
 import type { DsCodeConfig, PartialDsCodeConfig } from './schema.js'
 
@@ -53,6 +53,12 @@ export async function rememberAllowedCommand(command: string, options: LoadConfi
 
   await mkdir(join(projectDir, '.ds-code'), { recursive: true })
   await writeFile(projectPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf-8')
+}
+
+export async function loadAgentInstructions(projectDir = process.cwd()): Promise<string> {
+  const filePath = await findUp('AGENTS.md', resolve(projectDir))
+  if (!filePath) return ''
+  return readFile(filePath, 'utf-8')
 }
 
 export async function readConfigFile(filePath: string): Promise<PartialDsCodeConfig> {
@@ -118,6 +124,25 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
   }
 
   return config
+}
+
+async function findUp(fileName: string, startDir: string): Promise<string | null> {
+  let current = startDir
+  const root = parse(current).root
+
+  while (true) {
+    const candidate = join(current, fileName)
+    try {
+      await readFile(candidate, 'utf-8')
+      return candidate
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'EISDIR') throw err
+    }
+
+    if (current === root) return null
+    current = dirname(current)
+  }
 }
 
 function pickScalarFields(config: PartialDsCodeConfig): PartialDsCodeConfig {
