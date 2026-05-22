@@ -54,6 +54,7 @@ render(
     apiKey: options.apiKey,
     ...(options.model ? { model: options.model } : {}),
     ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+    allowedCommands: options.allowedCommands,
     ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     resume: options.resume,
   }),

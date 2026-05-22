@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_CONFIG } from './defaults.js'
@@ -33,6 +33,26 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<DsCod
   }
 
   return validated
+}
+
+export async function rememberAllowedCommand(command: string, options: LoadConfigOptions = {}): Promise<void> {
+  const projectDir = options.projectDir ? resolve(options.projectDir) : process.cwd()
+  const projectPath = join(projectDir, '.ds-code', 'settings.json')
+  const projectConfig = await readConfigFile(projectPath)
+  const existingCommands = projectConfig.permissions?.allowedCommands ?? []
+
+  if (existingCommands.includes(command)) return
+
+  const updated: PartialDsCodeConfig = {
+    ...projectConfig,
+    permissions: {
+      ...projectConfig.permissions,
+      allowedCommands: [...existingCommands, command],
+    },
+  }
+
+  await mkdir(join(projectDir, '.ds-code'), { recursive: true })
+  await writeFile(projectPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf-8')
 }
 
 export async function readConfigFile(filePath: string): Promise<PartialDsCodeConfig> {

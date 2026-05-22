@@ -173,7 +173,7 @@ interface Tool {
 
 - `allowedCommands` 配置白名单。
 - 用户本次允许。
-- 用户始终允许同类工具或同类 bash 命令。
+- 用户始终允许同类工具或同类 bash 命令，bash 命令会写入项目 `.ds-code/settings.json`。
 - 黑名单优先级高于白名单与默认规则。
 
 ### 5.5 上下文与会话

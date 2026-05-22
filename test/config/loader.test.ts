@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DEFAULT_CONFIG } from '../../src/config/defaults.js'
-import { ConfigError, loadConfig, mergeConfig, readConfigFile, validateConfig } from '../../src/config/loader.js'
+import { ConfigError, loadConfig, mergeConfig, readConfigFile, rememberAllowedCommand, validateConfig } from '../../src/config/loader.js'
 
 describe('config loader', () => {
   let tempDir: string
@@ -91,6 +91,17 @@ describe('config loader', () => {
     expect(() => validateConfig({ ...DEFAULT_CONFIG, provider: 'bad' } as never)).toThrow(
       'Invalid config field "provider"',
     )
+  })
+
+  it('persists remembered allowed commands to project settings', async () => {
+    await rememberAllowedCommand('git status', { projectDir })
+    await rememberAllowedCommand('pnpm test', { projectDir })
+    await rememberAllowedCommand('git status', { projectDir })
+
+    const content = await readFile(join(projectDir, '.ds-code', 'settings.json'), 'utf-8')
+    const config = JSON.parse(content) as { permissions: { allowedCommands: string[] } }
+
+    expect(config.permissions.allowedCommands).toEqual(['git status', 'pnpm test'])
   })
 
   it('requires API key when requested', async () => {

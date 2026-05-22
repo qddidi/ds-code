@@ -23,6 +23,7 @@ import { SessionStore, type SessionData } from '../core/session.js'
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
 import { resolveModelCommand } from './model.js'
 import { NAME, VERSION } from '../index.js'
+import { rememberAllowedCommand } from '../config/loader.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 
 export interface AppProps {
@@ -30,6 +31,7 @@ export interface AppProps {
   apiKey: string
   model?: string
   baseUrl?: string
+  allowedCommands?: string[]
   systemPrompt?: string
   initialPrompt?: string
   resume?: boolean
@@ -55,7 +57,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -109,6 +111,8 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
       registry.register(bashTool)
 
       const permissionManager = new PermissionManager({
+        allowedCommands,
+        rememberBashCommand: rememberAllowedCommand,
         confirm: async (request) => {
           return new Promise((resolve) => {
             setPermReq({

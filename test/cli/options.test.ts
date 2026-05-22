@@ -45,6 +45,15 @@ describe('CLI options', () => {
     expect(options.initialPrompt).toBe('fix bug')
   })
 
+  it('passes configured allowed commands through to the app options', () => {
+    const options = resolveCliOptions([], {
+      ...DEFAULT_CONFIG,
+      permissions: { allowedCommands: ['git status', 'pnpm test*'] },
+    }, {})
+
+    expect(options.allowedCommands).toEqual(['git status', 'pnpm test*'])
+  })
+
   it('reads named options', () => {
     expect(readOption(['--model', 'pro'], '--model')).toBe('pro')
     expect(readOption(['--base-url', 'https://relay.example.com'], '--base-url')).toBe('https://relay.example.com')

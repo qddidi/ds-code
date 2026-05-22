@@ -6,6 +6,7 @@ export interface CliOptions {
   apiKey?: string
   model?: string
   baseUrl?: string
+  allowedCommands: string[]
   initialPrompt?: string
   resume: boolean
 }
@@ -15,6 +16,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
   const apiKey = resolveApiKey(provider, config, env)
   const model = readOption(args, '--model') ?? config.model
   const baseUrl = readOption(args, '--base-url') ?? config.baseUrl
+  const allowedCommands = config.permissions.allowedCommands
   const resume = args.includes('--resume')
   const initialPrompt = readInitialPrompt(args)
 
@@ -23,6 +25,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
     ...(apiKey ? { apiKey } : {}),
     model,
     baseUrl,
+    allowedCommands,
     ...(initialPrompt ? { initialPrompt } : {}),
     resume,
   }

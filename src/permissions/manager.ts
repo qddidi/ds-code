@@ -10,6 +10,7 @@ export type PermissionResponse = 'allow_once' | 'allow_always' | 'deny'
 
 export interface PermissionManagerOptions {
   allowedCommands?: string[]
+  rememberBashCommand?: (command: string) => Promise<void>
   confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 }
 
@@ -28,10 +29,12 @@ export class PermissionManager {
   private allowedCommands: string[]
   private alwaysAllowedTools = new Set<string>()
   private alwaysAllowedBashCommands: string[] = []
+  private rememberBashCommand?: (command: string) => Promise<void>
   private confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 
   constructor(options: PermissionManagerOptions = {}) {
     this.allowedCommands = options.allowedCommands ?? []
+    this.rememberBashCommand = options.rememberBashCommand
     this.confirm = options.confirm
   }
 
@@ -52,7 +55,9 @@ export class PermissionManager {
 
     if (response === 'allow_always') {
       if (tool.name === 'bash') {
-        this.alwaysAllowedBashCommands.push(String(args.command ?? ''))
+        const command = String(args.command ?? '')
+        this.alwaysAllowedBashCommands.push(command)
+        await this.rememberBashCommand?.(command)
       } else {
         this.alwaysAllowedTools.add(tool.name)
       }
