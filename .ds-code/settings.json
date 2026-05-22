@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allowedCommands": [
+      "git status",
+      "git add -A"
+    ]
+  }
+}

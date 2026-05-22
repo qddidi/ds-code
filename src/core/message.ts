@@ -29,6 +29,27 @@ export function toolResultMessage(toolCallId: string, content: string): ChatMess
   return { role: 'tool', content, tool_call_id: toolCallId }
 }
 
+export interface DefaultSystemPromptOptions {
+  cwd: string
+  agentInstructions?: string
+}
+
+export function defaultSystemPrompt(options: DefaultSystemPromptOptions): string {
+  const projectInstructions = options.agentInstructions
+    ? `Project instructions from AGENTS.md:\n${options.agentInstructions}\n\n`
+    : ''
+
+  return `You are ds-code, an AI coding assistant running in the user's terminal.
+
+Working directory: ${options.cwd}
+
+${projectInstructions}You have tools to read, write, edit, list, search files, and execute shell commands. Use tools only when the user asks about code, files, or the project. For general conversation, respond directly without using tools.
+
+When editing an existing file, prefer edit over shell commands. Before calling edit, read the file and copy old_string exactly from the current file content, including indentation, spaces, and line endings. Make old_string unique unless every match should be replaced with replace_all=true.
+
+IMPORTANT: When working on a task, complete it fully before responding. Do not stop in the middle to give progress updates. Keep using tools until the task is done, then provide a final summary.`
+}
+
 export function serializeMessages(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
     const serialized: ChatMessage = { role: msg.role, content: msg.content }

@@ -77,4 +77,25 @@ describe('ContextManager', () => {
     expect(messages.at(-2)).toEqual(userMessage('recent question'))
     expect(messages.at(-1)).toEqual(assistantMessage('recent answer'))
   })
+
+  it('keeps a single summary across repeated compression', async () => {
+    const context = new ContextManager({ maxTokens: 100, preserveRecentMessages: 1 })
+    context.addMessage(systemMessage('system prompt'))
+    context.addMessage(userMessage('old question'))
+    context.addMessage(assistantMessage('old answer'))
+    context.addMessage(userMessage('recent question'))
+
+    await context.compress(async () => 'first summary')
+    context.addMessage(assistantMessage('recent answer'))
+    context.addMessage(userMessage('next question'))
+    await context.compress(async (messages) => {
+      expect(messages[0]?.content).toContain('first summary')
+      return 'merged summary'
+    })
+
+    const messages = context.getMessages()
+    expect(messages[0]).toEqual(systemMessage('system prompt'))
+    expect(messages.filter((message) => message.role === 'system' && message.content?.startsWith('Summary of earlier conversation:'))).toHaveLength(1)
+    expect(messages[1]?.content).toContain('merged summary')
+  })
 })

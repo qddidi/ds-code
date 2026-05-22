@@ -102,6 +102,25 @@ describe('Agent', () => {
     expect(toolMsg?.content).toBe('echo: ping')
   })
 
+  it('reuses tool definitions across loop iterations', async () => {
+    const client = createMockClient([
+      toolCallMessage([{ name: 'echo', args: '{"text":"first"}', id: 'c1' }]),
+      toolCallMessage([{ name: 'echo', args: '{"text":"second"}', id: 'c2' }]),
+      textMessage('Done'),
+    ])
+    const registry = new ToolRegistry()
+    registry.register(createEchoTool())
+    const toToolDefinitions = vi.spyOn(registry, 'toToolDefinitions')
+    const agent = new Agent(client, registry)
+
+    await agent.run('do two things')
+
+    expect(toToolDefinitions).toHaveBeenCalledTimes(1)
+    const chatStream = vi.mocked(client.chatStream)
+    expect(chatStream.mock.calls[0]?.[2]).toBe(chatStream.mock.calls[1]?.[2])
+    expect(chatStream.mock.calls[1]?.[2]).toBe(chatStream.mock.calls[2]?.[2])
+  })
+
   it('preserves reasoning content on tool-call assistant messages', async () => {
     const client = createMockClient([
       toolCallMessage([{ name: 'echo', args: '{"text":"ping"}', id: 'c1' }], '需要先查看工具结果'),

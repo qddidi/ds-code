@@ -2,6 +2,8 @@ import type { ChatMessage } from '../api/types.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 import { systemMessage } from './message.js'
 
+const SUMMARY_PREFIX = 'Summary of earlier conversation:'
+
 export interface ContextManagerOptions {
   maxTokens: number
   compressionThreshold?: number
@@ -51,11 +53,19 @@ export class ContextManager {
 
     if (compressibleMessages.length === 0) return
 
-    const summary = await summarize(compressibleMessages)
+    const existingSummaries = systemMessages.filter(isSummaryMessage)
+    const preservedSystemMessages = systemMessages.filter((message) => !isSummaryMessage(message))
+    const summaryInputs = [...existingSummaries, ...compressibleMessages]
+
+    const summary = await summarize(summaryInputs)
     this.messages = [
-      ...systemMessages,
-      systemMessage(`Summary of earlier conversation:\n${summary}`),
+      ...preservedSystemMessages,
+      systemMessage(`${SUMMARY_PREFIX}\n${summary}`),
       ...recentMessages,
     ]
   }
+}
+
+function isSummaryMessage(message: ChatMessage): boolean {
+  return message.role === 'system' && message.content?.startsWith(SUMMARY_PREFIX) === true
 }

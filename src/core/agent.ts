@@ -39,6 +39,7 @@ export class Agent {
   private config: AgentConfig
   private messages: ChatMessage[] = []
   private contextManager: ContextManager
+  private toolDefinitions: ToolDefinition[]
 
   constructor(
     client: ChatClient,
@@ -47,6 +48,7 @@ export class Agent {
   ) {
     this.client = client
     this.registry = registry
+    this.toolDefinitions = registry.toToolDefinitions()
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.messages = [systemMessage(this.config.systemPrompt)]
     this.contextManager = new ContextManager({
@@ -129,7 +131,7 @@ export class Agent {
           onThinking: (chunk) => { callbacks.onThinking?.(chunk) },
           onToolCallStart: () => { callbacks.onToolCallStart?.() },
         },
-        this.registry.toToolDefinitions(),
+        this.toolDefinitions,
         signal,
       )
 

@@ -4,6 +4,7 @@ import {
   userMessage,
   assistantMessage,
   toolResultMessage,
+  defaultSystemPrompt,
   serializeMessages,
 } from '../../src/core/message.js'
 
@@ -50,6 +51,26 @@ describe('message builders', () => {
       content: 'file content here',
       tool_call_id: 'call_1',
     })
+  })
+})
+
+
+describe('defaultSystemPrompt', () => {
+  it('builds a stable prompt with project instructions', () => {
+    const prompt = defaultSystemPrompt({ cwd: '/repo', agentInstructions: 'Use pnpm.\n' })
+
+    expect(prompt).toContain('You are ds-code')
+    expect(prompt).toContain('Working directory: /repo')
+    expect(prompt).toContain('Project instructions from AGENTS.md:\nUse pnpm.\n')
+    expect(prompt.indexOf('Working directory')).toBeLessThan(prompt.indexOf('Project instructions'))
+    expect(prompt.indexOf('Project instructions')).toBeLessThan(prompt.indexOf('You have tools'))
+  })
+
+  it('omits the project instructions block when empty', () => {
+    const prompt = defaultSystemPrompt({ cwd: '/repo' })
+
+    expect(prompt).not.toContain('Project instructions from AGENTS.md')
+    expect(prompt).toContain('Working directory: /repo')
   })
 })
 
