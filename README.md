@@ -10,6 +10,13 @@ npm install -g @mrdistore/ds-code
 
 ## 配置
 
+配置优先级为：CLI 参数 > 项目配置 > 全局配置 > 环境变量/默认值。
+
+配置文件位置：
+
+- 全局配置：`~/.ds-code/config.json`
+- 项目配置：当前项目下的 `.ds-code/settings.json`
+
 设置 API Key：
 
 ```bash
@@ -37,6 +44,41 @@ OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
   "model": "openai/gpt-4o"
 }
 ```
+
+完整配置示例：
+
+```json
+{
+  "provider": "deepseek",
+  "apiKey": "sk-xxx",
+  "baseUrl": "https://api.deepseek.com",
+  "model": "deepseek-v4-pro",
+  "maxTokens": 4096,
+  "temperature": 0.2,
+  "timeout": 120000,
+  "permissions": {
+    "allowedCommands": [
+      "git status",
+      "pnpm test"
+    ]
+  }
+}
+```
+
+常用字段：
+
+| 字段 | 说明 |
+|------|------|
+| `provider` | API 提供方：`deepseek`、`openai` 或 `custom` |
+| `apiKey` | API Key；也可通过环境变量 `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` 设置 |
+| `baseUrl` | API 基础地址，使用中转站时设置 |
+| `model` | 模型名称，如 `deepseek-v4-pro`、`deepseek-reasoner`、`gpt-4o` |
+| `maxTokens` | 单次响应最大 token 数 |
+| `temperature` | 采样温度 |
+| `timeout` | 请求超时时间，单位毫秒 |
+| `permissions.allowedCommands` | 预允许执行的 Bash 命令，支持以 `*` 结尾的前缀匹配 |
+
+`AGENTS.md` 可放在项目目录或父目录中，用于提供项目级 AI 指令；启动时会读取离当前目录最近的一个。
 
 ## 使用
 
