@@ -1,24 +1,16 @@
-# 添加依赖
+---
+description: 为项目添加 npm 依赖并完成必要配置
+argument-hint: <包名> [用途说明]
+allowed-tools: Read, Edit, Bash, Grep, Glob
+---
 
-为项目添加 npm 依赖包。
+添加依赖：$ARGUMENTS
 
-## 使用方式
+流程：
+1. 判断用途与安装位置：`dependencies` 或 `devDependencies`。
+2. 检查是否已有可复用依赖；可疑包名先提示风险。
+3. 用 `pnpm add` 或 `pnpm add -D` 安装，必要时加 `@types/*`。
+4. 做最小配置/代码改动，运行 `pnpm build` 和相关测试。
+5. 汇报依赖、安装位置、用途和验证结果。
 
-`/add-dep <包名>` 并说明用途
-
-## 执行步骤
-
-1. 确认包名正确（检查是否为知名包，防止 typosquatting）
-2. 判断是 dependencies 还是 devDependencies
-3. 运行 `pnpm add <包名>` 或 `pnpm add -D <包名>`
-4. 如果包有 TypeScript 类型定义需要额外安装（@types/xxx），一并安装
-5. 运行 `pnpm build` 确认不影响构建
-6. 如果该依赖需要配置（如 tsup 插件），完成配置
-7. 简要说明该依赖的作用和使用方式
-
-## 约束
-
-- 使用精确版本号（pnpm 默认行为）
-- 优先选择零依赖或依赖少的包
-- 如果项目中已有类似功能的包，优先复用而非新增
-- 不安装来路不明的包，对不熟悉的包名提出警告
+约束：不装来路不明或重复能力的包；优先低依赖；不自动提交。

@@ -1,26 +1,17 @@
-# 添加工具
+---
+description: 为 ds-code 添加一个新 Tool 并补充测试和文档
+argument-hint: <工具名称> <功能描述>
+allowed-tools: Read, Edit, Write, Bash, Grep, Glob
+---
 
-为 ds-code 添加一个新的工具（Tool）。
+添加工具：$ARGUMENTS
 
-## 使用方式
+流程：
+1. 阅读 `src/tools/types.ts`、`registry.ts` 和同类工具。
+2. 在 `src/tools/` 最小实现并注册工具，必要时更新导出。
+3. 增加 `test/tools/<工具名>.test.ts`，覆盖成功、参数错误、边界和权限。
+4. 如工具会写入、删除、执行命令或影响外部状态，设置 `requiresPermission: true`。
+5. 仅在工具列表或测试计划变化时更新 `docs/PROJECT_PLAN.md`。
+6. 运行 `pnpm build` 和相关测试。
 
-`/add-tool <工具名称>` 并描述工具的功能
-
-## 执行步骤
-
-1. 读取 src/tools/types.ts 了解 Tool 接口定义
-2. 读取 src/tools/registry.ts 了解注册方式
-3. 参考已有工具实现（如 src/tools/read.ts）了解代码风格
-4. 在 src/tools/ 下创建新工具文件
-5. 实现 Tool 接口：name、description、parameters（JSON Schema）、execute
-6. 在 registry 中注册该工具
-7. 编写对应测试文件 test/tools/<工具名>.test.ts
-8. 运行 `pnpm build` 和 `pnpm test` 确认通过
-9. 更新 docs/MODULES_AND_TESTS.md 中的工具列表
-
-## 约束
-
-- parameters 使用 JSON Schema 格式，与 OpenAI function calling 兼容
-- 危险操作（写入、删除、执行）必须设置 requiresPermission: true
-- execute 方法返回 ToolResult，包含 content 和 isError 字段
-- 错误不要抛异常，而是返回 isError: true 的 ToolResult
+约束：参数用 OpenAI-compatible JSON Schema；工具层错误返回 `ToolResult`；不自动提交。

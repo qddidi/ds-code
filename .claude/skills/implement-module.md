@@ -1,25 +1,16 @@
-# 实现模块
+---
+description: 按模块编号实现 PROJECT_PLAN 中定义的功能
+argument-hint: M02
+allowed-tools: Read, Edit, Write, Bash, Grep, Glob
+---
 
-根据 docs/MODULES_AND_TESTS.md 中的模块定义，实现指定模块的代码。
+实现模块：$ARGUMENTS
 
-## 使用方式
+流程：
+1. 读取 `docs/PROJECT_PLAN.md` 中该模块的路径、状态和完成标准。
+2. 阅读相关源码/测试，确认缺口和依赖；已完成则只处理明确缺失项。
+3. 按现有风格做最小实现，必要时补测试。
+4. 运行相关测试和 `pnpm build`。
+5. 汇报变更文件、验证结果和遗留问题。
 
-`/implement-module <模块编号>`，例如 `/implement-module M02`
-
-## 执行步骤
-
-1. 读取 docs/MODULES_AND_TESTS.md，找到对应模块的「范围」和「完成标准」
-2. 读取 docs/TECHNICAL_PLAN.md 中相关的架构设计
-3. 检查该模块的依赖模块是否已实现（检查对应文件是否存在）
-4. 按照项目现有代码风格实现模块代码
-5. 实现完成后运行 `pnpm build` 确认编译通过
-6. 运行该模块的测试 `pnpm test -- --grep <模块名>`
-7. 汇报完成状态和遗留问题
-
-## 约束
-
-- 遵循项目已有的代码风格和命名规范
-- 不引入模块范围外的额外依赖
-- 每个文件头部不加多余注释
-- 导出接口要与 docs/TECHNICAL_PLAN.md 中定义的一致
-- 每次测试完成后，确认测试通过，直接提交代码
+约束：遵循 `CLAUDE.md`；不引入范围外依赖；不做无关重构；接口与现有代码/计划一致；不自动提交。

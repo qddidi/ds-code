@@ -1,27 +1,17 @@
-# 发布版本
+---
+description: 构建并准备发布 ds-code 新版本
+argument-hint: <semver版本号>
+allowed-tools: Read, Edit, Bash, Grep, Glob
+---
 
-构建并发布 ds-code 的新版本。
+准备发布：$ARGUMENTS
 
-## 使用方式
+流程：
+1. 确认版本号符合 semver，并检查工作区状态。
+2. 有未提交改动时先汇报并询问是否继续。
+3. 运行 `pnpm test` 和 `pnpm build`。
+4. 更新 `package.json` version；如有 `CHANGELOG.md`，更新版本说明。
+5. 再次运行必要验证。
+6. 只有用户明确确认后，才 commit、tag、push 或 publish。
 
-`/release <版本号>`，例如 `/release 0.1.0`
-
-## 执行步骤
-
-1. 确认当前分支干净（无未提交改动）
-2. 运行完整测试套件 `pnpm test`
-3. 运行构建 `pnpm build`
-4. 更新 package.json 中的 version 字段
-5. 更新 CHANGELOG.md（如果存在）
-6. 创建 git commit: `chore: release v<版本号>`
-7. 创建 git tag: `v<版本号>`
-8. 提示用户确认后执行：
-   - `git push origin main --tags`
-   - `pnpm publish`
-
-## 约束
-
-- 测试不通过不允许发布
-- 构建失败不允许发布
-- push 和 publish 必须等用户确认
-- 遵循 semver 规范
+约束：测试/构建失败不发布；不使用 `--no-verify`；不自动提交。
