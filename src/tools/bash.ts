@@ -1,4 +1,4 @@
-import { spawn, execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
 
@@ -35,10 +35,6 @@ function normalizeTimeout(value: unknown): number {
 }
 
 function executeCommand(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
-  if (process.platform === 'win32') {
-    return executeCommandWithExecFile(command, cwd, timeoutMs, signal)
-  }
-
   return new Promise((resolveResult) => {
     if (signal?.aborted) {
       resolveResult({ content: formatResult('', '', null, false, true), isError: true })
@@ -50,6 +46,7 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
       shell: true,
       windowsHide: true,
       detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
 
     let stdout = ''
@@ -67,7 +64,12 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
     }
 
     const stopChild = (): void => {
-      if (process.platform !== 'win32' && child.pid) {
+      if (process.platform === 'win32' && child.pid) {
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+        return
+      }
+
+      if (child.pid) {
         try {
           process.kill(-child.pid, 'SIGTERM')
         } catch {
@@ -80,7 +82,12 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
 
     const forceStopChild = (): void => {
       if (settled) return
-      if (process.platform !== 'win32' && child.pid) {
+      if (process.platform === 'win32' && child.pid) {
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true })
+        return
+      }
+
+      if (child.pid) {
         try {
           process.kill(-child.pid, 'SIGKILL')
         } catch {
@@ -129,61 +136,6 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
       })
     })
   })
-}
-
-function executeCommandWithExecFile(command: string, cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<ToolResult> {
-  return new Promise((resolveResult) => {
-    if (signal?.aborted) {
-      resolveResult({ content: formatResult('', '', null, false, true), isError: true })
-      return
-    }
-
-    const child = execFile(command, {
-      cwd,
-      shell: true,
-      windowsHide: true,
-      timeout: timeoutMs,
-      killSignal: 'SIGTERM',
-      signal,
-    }, (err, stdout, stderr) => {
-      const aborted = signal?.aborted ?? false
-      const timedOut = isTimeoutError(err)
-      const exitCode = err ? getExitCode(err) : 0
-      const finish = (): void => {
-        resolveResult({
-          content: formatResult(String(stdout), String(stderr), exitCode, timedOut, aborted),
-          isError: timedOut || aborted || (typeof exitCode === 'number' && exitCode !== 0) || undefined,
-        })
-      }
-
-      if (timedOut && process.platform === 'win32') {
-        setTimeout(finish, 500)
-      } else {
-        finish()
-      }
-    })
-
-    child.on('error', (err) => {
-      const aborted = signal?.aborted ?? false
-      const timedOut = isTimeoutError(err)
-      resolveResult({
-        content: formatResult('', err.message, getExitCode(err), timedOut, aborted),
-        isError: true,
-      })
-    })
-  })
-}
-
-function isTimeoutError(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'killed' in err && (err as { killed?: boolean }).killed === true
-}
-
-function getExitCode(err: unknown): number | null {
-  if (typeof err === 'object' && err !== null && 'code' in err) {
-    const code = (err as { code?: unknown }).code
-    return typeof code === 'number' ? code : null
-  }
-  return null
 }
 
 function formatResult(stdout: string, stderr: string, exitCode: number | null, timedOut: boolean, aborted: boolean): string {

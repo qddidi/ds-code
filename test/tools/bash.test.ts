@@ -48,6 +48,15 @@ describe('bash tool', () => {
     expect(result.content).toContain('timedOut=true')
   }, 10000)
 
+  it('closes stdin so commands waiting for input do not hang', async () => {
+    const script = `process.stdin.resume(); process.stdin.on('end', () => { process.stdout.write('eof') })`
+    const result = await bashTool.execute({ command: `node -e "${script}"`, cwd: tempDir, timeout_ms: 1000 })
+
+    expect(result.content).toContain('stdout="eof"')
+    expect(result.content).toContain('exitCode=0')
+    expect(result.content).toContain('timedOut=false')
+  })
+
   it('runs commands in the requested working directory', async () => {
     const nestedDir = join(tempDir, 'nested')
     await mkdir(nestedDir)
