@@ -115,7 +115,7 @@ export function parseAllowedTools(value: string | string[] | undefined, path: st
       allowedTools.push({ tool: 'bash', command })
       continue
     }
-    if (!/^[a-z][a-z0-9_-]*$/.test(entry)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(entry)) {
       warnings.push({ path, message: `Invalid allowed-tools entry: ${entry}` })
       continue
     }

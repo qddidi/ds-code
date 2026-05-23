@@ -8,5 +8,9 @@ src/**/*.js
 src/**/*.d.ts
 src/**/*.js.map
 src/**/*.d.ts.map
-.claude/
-.ds-code/
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+.ds-code/*
+!.ds-code/skills/
+!.ds-code/skills/**

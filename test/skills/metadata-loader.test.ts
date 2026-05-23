@@ -18,7 +18,7 @@ describe('loadSkillMetadata', () => {
 name: review
 description: Review code changes
 allowed-tools:
-  - read_file
+  - Read
   - bash:git status
 references:
   - checklist.md
@@ -33,7 +33,7 @@ SECRET BODY
         name: 'review',
         description: 'Review code changes',
         source: 'project',
-        allowedTools: [{ tool: 'read_file' }, { tool: 'bash', command: 'git status' }],
+        allowedTools: [{ tool: 'Read' }, { tool: 'bash', command: 'git status' }],
         referencePaths: ['checklist.md'],
       })
       expect(JSON.stringify(result.skills)).not.toContain('SECRET BODY')
