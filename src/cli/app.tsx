@@ -106,7 +106,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const permissionManagerRef = React.useRef<PermissionManager | null>(null)
   const skillRegistryRef = React.useRef<SkillRegistry | null>(null)
   const abortRef = React.useRef<AbortController | null>(null)
-  const pendingInputsRef = React.useRef<string[]>([])
+  const pendingInputsRef = React.useRef<Array<{ input: string; displayInput: string; addUserMessage: boolean }>>([])
   const runningRef = React.useRef(false)
   const bufferRef = React.useRef('')
   const flushRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
@@ -380,24 +380,32 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     }
 
     if (skillsEnabled && skillsAutoMatch && !runningRef.current) {
+      setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: text }])
       const client = clientRef.current
       const skills = skillRegistryRef.current?.list() ?? []
       const localSkill = matchSkill(text, skills)
+      setStatus('thinking')
       const skill = localSkill ?? (skillsAutoMatchModel && client ? await matchSkillWithModel(text, skills, client) : null)
       if (skill) {
+        setStatus('idle')
         void requestSkillActivation(
           { metadata: skill, userArgs: text },
-          { onDeny: () => { enqueueAgentInput(text) } },
+          { onDeny: () => { enqueueAgentInput(text, text, false) } },
         )
         return
       }
+      enqueueAgentInput(text, text, false)
+      return
     }
 
     enqueueAgentInput(text)
   }
 
-  const enqueueAgentInput = (input: string): void => {
-    pendingInputsRef.current.push(input)
+  const enqueueAgentInput = (input: string, displayInput = input, addUserMessage = true): void => {
+    if (addUserMessage) {
+      setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: displayInput }])
+    }
+    pendingInputsRef.current.push({ input, displayInput, addUserMessage: false })
     if (!runningRef.current) {
       void runNextAgentInput()
     }
@@ -410,19 +418,21 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
     runningRef.current = true
     try {
-      await runAgent(next)
+      await runAgent(next.input, [], next.displayInput, next.addUserMessage)
     } finally {
       runningRef.current = false
       void runNextAgentInput()
     }
   }
 
-  const runAgent = async (input: string, allowedTools: SkillActivationRequest['metadata']['allowedTools'] = [], displayInput = input): Promise<void> => {
+  const runAgent = async (input: string, allowedTools: SkillActivationRequest['metadata']['allowedTools'] = [], displayInput = input, addUserMessage = true): Promise<void> => {
     const agent = agentRef.current
     const permissionManager = permissionManagerRef.current
     if (!agent) return
 
-    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: displayInput }])
+    if (addUserMessage) {
+      setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: displayInput }])
+    }
     setStatus('thinking')
     setStreamingText('')
     setToolHistory([])
@@ -684,7 +694,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       const skill = await loadSkillActivation(request.metadata)
       const prompt = formatSkillActivationPrompt(skill, request.userArgs)
       const displayInput = request.userArgs ? `/${skill.metadata.name} ${request.userArgs}` : `/${skill.metadata.name}`
-      await runAgent(prompt, skill.metadata.allowedTools, displayInput)
+      await runAgent(prompt, skill.metadata.allowedTools, displayInput, false)
     } catch (err) {
       setCommandOutput(`Failed to activate skill: ${err instanceof Error ? err.message : String(err)}`)
     }
