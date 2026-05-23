@@ -34,10 +34,10 @@ describe('bash tool', () => {
     expect(result.content).toContain('exitCode=0')
   })
 
-  it('returns non-zero exit codes', async () => {
+  it('returns non-zero exit codes as errors', async () => {
     const result = await bashTool.execute({ command: 'node -e "process.exit(7)"', cwd: tempDir })
 
-    expect(result.isError).toBeUndefined()
+    expect(result.isError).toBe(true)
     expect(result.content).toContain('exitCode=7')
   })
 

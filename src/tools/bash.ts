@@ -125,7 +125,7 @@ function executeCommand(command: string, cwd: string, timeoutMs: number, signal?
     child.on('close', (code) => {
       finish({
         content: formatResult(stdout, stderr, code, timedOut, aborted),
-        isError: timedOut || aborted || undefined,
+        isError: timedOut || aborted || (typeof code === 'number' && code !== 0) || undefined,
       })
     })
   })
@@ -152,7 +152,7 @@ function executeCommandWithExecFile(command: string, cwd: string, timeoutMs: num
       const finish = (): void => {
         resolveResult({
           content: formatResult(String(stdout), String(stderr), exitCode, timedOut, aborted),
-          isError: timedOut || aborted || undefined,
+          isError: timedOut || aborted || (typeof exitCode === 'number' && exitCode !== 0) || undefined,
         })
       }
 
