@@ -3,6 +3,7 @@ import {
   commandMatchesPattern,
   defaultDecisionForTool,
   isDangerousBashCommand,
+  patternForAlwaysAllowedCommand,
   type PermissionDecision,
 } from './rules.js'
 
@@ -55,9 +56,9 @@ export class PermissionManager {
 
     if (response === 'allow_always') {
       if (tool.name === 'bash') {
-        const command = String(args.command ?? '')
-        this.alwaysAllowedBashCommands.push(command)
-        await this.rememberBashCommand?.(command)
+        const pattern = patternForAlwaysAllowedCommand(String(args.command ?? ''))
+        this.alwaysAllowedBashCommands.push(pattern)
+        await this.rememberBashCommand?.(pattern)
       } else {
         this.alwaysAllowedTools.add(tool.name)
       }

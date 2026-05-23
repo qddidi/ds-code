@@ -2,7 +2,9 @@
   "permissions": {
     "allowedCommands": [
       "git status",
-      "git add -A"
+      "git add -A",
+      "git commit -m \"chore: update project\"",
+      "git push"
     ]
   }
 }

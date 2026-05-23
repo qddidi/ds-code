@@ -71,18 +71,19 @@ describe('PermissionManager', () => {
     expect(confirm).toHaveBeenCalledTimes(1)
   })
 
-  it('remembers allow always responses per bash command', async () => {
+  it('remembers allow always responses per bash command pattern', async () => {
     const confirm = vi.fn(async () => 'allow_always' as const)
     const rememberBashCommand = vi.fn(async () => {})
     const manager = new PermissionManager({ confirm, rememberBashCommand })
 
     await expect(manager.check(bashTool, { command: 'ls src' })).resolves.toMatchObject({ decision: 'allow' })
     await expect(manager.check(bashTool, { command: 'ls src' })).resolves.toMatchObject({ decision: 'allow' })
-    await expect(manager.check(bashTool, { command: 'git status' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(bashTool, { command: 'git commit -m "chore: update project"' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(bashTool, { command: 'git commit -m "fix: bug"' })).resolves.toMatchObject({ decision: 'allow' })
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(rememberBashCommand).toHaveBeenCalledTimes(2)
     expect(rememberBashCommand).toHaveBeenCalledWith('ls src')
-    expect(rememberBashCommand).toHaveBeenCalledWith('git status')
+    expect(rememberBashCommand).toHaveBeenCalledWith('git commit -m *')
   })
 
   it('applies deny before allowlist rules', async () => {
