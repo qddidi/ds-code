@@ -143,6 +143,10 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
     throw new ConfigError('Invalid config field "skills.autoMatch": expected boolean')
   }
 
+  if (typeof config.skills.autoMatchModel !== 'boolean') {
+    throw new ConfigError('Invalid config field "skills.autoMatchModel": expected boolean')
+  }
+
   return config
 }
 
@@ -190,5 +194,6 @@ function pickSkillFields(skills: PartialDsCodeConfig['skills']): Partial<DsCodeC
   if (!skills) return result
   if ('enabled' in skills) result.enabled = skills.enabled
   if ('autoMatch' in skills) result.autoMatch = skills.autoMatch
+  if ('autoMatchModel' in skills) result.autoMatchModel = skills.autoMatchModel
   return result
 }

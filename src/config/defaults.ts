@@ -13,6 +13,7 @@ export const DEFAULT_CONFIG: DsCodeConfig = {
   },
   skills: {
     enabled: true,
-    autoMatch: false,
+    autoMatch: true,
+    autoMatchModel: true,
   },
 }

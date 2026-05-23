@@ -10,6 +10,7 @@ export interface CliOptions {
   allowAllCommands: boolean
   skillsEnabled: boolean
   skillsAutoMatch: boolean
+  skillsAutoMatchModel: boolean
   initialPrompt?: string
   resume: boolean
 }
@@ -23,6 +24,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
   const allowAllCommands = config.permissions.allowAllCommands
   const skillsEnabled = config.skills.enabled
   const skillsAutoMatch = config.skills.autoMatch
+  const skillsAutoMatchModel = config.skills.autoMatchModel
   const resume = args.includes('--resume')
   const initialPrompt = readInitialPrompt(args)
 
@@ -35,6 +37,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
     allowAllCommands,
     skillsEnabled,
     skillsAutoMatch,
+    skillsAutoMatchModel,
     ...(initialPrompt ? { initialPrompt } : {}),
     resume,
   }

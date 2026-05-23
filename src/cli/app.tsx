@@ -30,6 +30,7 @@ import { loadSkillMetadata } from '../skills/metadata-loader.js'
 import { loadSkillActivation } from '../skills/activation-loader.js'
 import { SkillRegistry } from '../skills/registry.js'
 import { formatActivationSummary, formatSkillActivationPrompt, formatSkillDetail, formatSkillIndex, formatSkillsList } from '../skills/formatter.js'
+import { matchSkill, matchSkillWithModel } from '../skills/matcher.js'
 import type { SkillActivationRequest } from '../skills/types.js'
 
 export interface AppProps {
@@ -41,6 +42,7 @@ export interface AppProps {
   allowAllCommands?: boolean
   skillsEnabled?: boolean
   skillsAutoMatch?: boolean
+  skillsAutoMatchModel?: boolean
   systemPrompt?: string
   initialPrompt?: string
   resume?: boolean
@@ -74,7 +76,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = false, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -349,6 +351,20 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       return
     }
 
+    if (skillsEnabled && skillsAutoMatch && !runningRef.current) {
+      const client = clientRef.current
+      const skills = skillRegistryRef.current?.list() ?? []
+      const localSkill = matchSkill(text, skills)
+      const skill = localSkill ?? (skillsAutoMatchModel && client ? await matchSkillWithModel(text, skills, client) : null)
+      if (skill) {
+        void requestSkillActivation(
+          { metadata: skill, userArgs: text },
+          { onDeny: () => { enqueueAgentInput(text) } },
+        )
+        return
+      }
+    }
+
     enqueueAgentInput(text)
   }
 
@@ -373,12 +389,12 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     }
   }
 
-  const runAgent = async (input: string, allowedTools: SkillActivationRequest['metadata']['allowedTools'] = []): Promise<void> => {
+  const runAgent = async (input: string, allowedTools: SkillActivationRequest['metadata']['allowedTools'] = [], displayInput = input): Promise<void> => {
     const agent = agentRef.current
     const permissionManager = permissionManagerRef.current
     if (!agent) return
 
-    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: input }])
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: displayInput }])
     setStatus('thinking')
     setStreamingText('')
     setToolHistory([])
@@ -584,7 +600,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
           `Model:     ${clientRef.current?.getModel() ?? 'unknown'}`,
           `CWD:       ${process.cwd()}`,
           `Session:   ${sessionRef.current?.id ?? 'none'}`,
-          `Skills:    ${skillsEnabled ? `${skillRegistry?.list().length ?? 0} loaded, autoMatch=${skillsAutoMatch}, warnings=${skillRegistry?.getWarnings().length ?? 0}` : 'disabled'}`,
+          `Skills:    ${skillsEnabled ? `${skillRegistry?.list().length ?? 0} loaded, autoMatch=${skillsAutoMatch}, autoMatchModel=${skillsAutoMatchModel}, warnings=${skillRegistry?.getWarnings().length ?? 0}` : 'disabled'}`,
         ]
         setCommandOutput(checks.join('\n'))
         break
@@ -617,20 +633,25 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     }
   }
 
-  const requestSkillActivation = async (request: SkillActivationRequest): Promise<void> => {
+  const requestSkillActivation = async (request: SkillActivationRequest, options: { onDeny?: () => void } = {}): Promise<void> => {
     const answer = await new Promise<SkillAnswer>((resolve) => {
       setSkillIdx(0)
       setSkillReq({ request, resolve })
     })
     if (answer === 'no') {
-      setCommandOutput(`Skill not activated: ${request.metadata.name}`)
+      if (options.onDeny) {
+        options.onDeny()
+      } else {
+        setCommandOutput(`Skill not activated: ${request.metadata.name}`)
+      }
       return
     }
 
     try {
       const skill = await loadSkillActivation(request.metadata)
       const prompt = formatSkillActivationPrompt(skill, request.userArgs)
-      await runAgent(prompt, skill.metadata.allowedTools)
+      const displayInput = request.userArgs ? `/${skill.metadata.name} ${request.userArgs}` : `/${skill.metadata.name}`
+      await runAgent(prompt, skill.metadata.allowedTools, displayInput)
     } catch (err) {
       setCommandOutput(`Failed to activate skill: ${err instanceof Error ? err.message : String(err)}`)
     }

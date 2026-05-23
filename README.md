@@ -62,6 +62,11 @@ OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
       "pnpm test"
     ],
     "allowAllCommands": false
+  },
+  "skills": {
+    "enabled": true,
+    "autoMatch": true,
+    "autoMatchModel": true
   }
 }
 ```
@@ -79,8 +84,53 @@ OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
 | `timeout` | 请求超时时间，单位毫秒 |
 | `permissions.allowedCommands` | 预允许执行的 Bash 命令，支持以 `*` 结尾的前缀匹配 |
 | `permissions.allowAllCommands` | 允许所有非危险 Bash 命令；危险命令仍会被拒绝 |
+| `skills.enabled` | 是否启用 skills 功能 |
+| `skills.autoMatch` | 是否对普通输入进行 skill 自动匹配（命中后会弹出确认） |
+| `skills.autoMatchModel` | 本地规则未命中时，是否允许调用模型进行 skill 匹配（更准但会多一次请求） |
 
 `AGENTS.md` 可放在项目目录或父目录中，用于提供项目级 AI 指令；启动时会读取离当前目录最近的一个。
+
+## Skills（技能）
+
+Skills 用于把常见任务封装成“可复用指令”。当启用自动匹配时，你直接用自然语言描述需求，ds-code 会尝试匹配到某个 skill，并在执行前请求确认。
+
+- 触发方式
+  - 手动：输入 `/<skill> ...`（会自动补全）
+  - 自动：直接输入自然语言（由 `skills.autoMatch` / `skills.autoMatchModel` 控制）
+
+### Skills 配置
+
+配置在 `skills` 字段下：
+
+```json
+{
+  "skills": {
+    "enabled": true,
+    "autoMatch": true,
+    "autoMatchModel": true
+  }
+}
+```
+
+建议：
+- 不想被频繁打断：将 `skills.autoMatch` 设为 `false`（仍可手动用 `/<skill>` 调用）
+- 想更少误触发且不增加额外请求：`autoMatch=true`、`autoMatchModel=false`
+
+### 使用示例
+
+- 手动调用（推荐用于可重复流程）：
+
+```text
+/review 看下当前git改动
+```
+
+- 自动匹配调用：
+
+```text
+看下当前git改动
+```
+
+如果匹配到 skill，会弹出是否激活；确认后会以 `/<skill> ...` 的形式展示在聊天记录中。
 
 ## 使用
 

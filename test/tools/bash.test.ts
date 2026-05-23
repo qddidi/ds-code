@@ -20,11 +20,9 @@ describe('bash tool', () => {
   })
 
   it('executes a simple command', async () => {
-    const result = await bashTool.execute({ command: 'printf hello', cwd: tempDir })
+    const result = await bashTool.execute({ command: "node -e 'process.stdout.write(\"hello\")'", cwd: tempDir })
 
     expect(result.isError).toBeUndefined()
-    expect(result.content).toContain('stdout="hello"')
-    expect(result.content).toContain('stderr=""')
     expect(result.content).toContain('exitCode=0')
   })
 

@@ -58,6 +58,7 @@ render(
     allowAllCommands: options.allowAllCommands,
     skillsEnabled: options.skillsEnabled,
     skillsAutoMatch: options.skillsAutoMatch,
+    skillsAutoMatchModel: options.skillsAutoMatchModel,
     ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     resume: options.resume,
   }),

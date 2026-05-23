@@ -55,6 +55,17 @@ describe('CLI options', () => {
     expect(options.allowAllCommands).toBe(true)
   })
 
+  it('passes skill options through to the app options', () => {
+    const options = resolveCliOptions([], {
+      ...DEFAULT_CONFIG,
+      skills: { enabled: false, autoMatch: false, autoMatchModel: false },
+    }, {})
+
+    expect(options.skillsEnabled).toBe(false)
+    expect(options.skillsAutoMatch).toBe(false)
+    expect(options.skillsAutoMatchModel).toBe(false)
+  })
+
   it('reads named options', () => {
     expect(readOption(['--model', 'pro'], '--model')).toBe('pro')
     expect(readOption(['--base-url', 'https://relay.example.com'], '--base-url')).toBe('https://relay.example.com')

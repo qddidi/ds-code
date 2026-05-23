@@ -15,6 +15,7 @@ export interface DsCodeConfig {
   skills: {
     enabled: boolean
     autoMatch: boolean
+    autoMatchModel: boolean
   }
 }
 
@@ -33,5 +34,6 @@ export type PartialDsCodeConfig = Partial<{
   skills: Partial<{
     enabled: boolean
     autoMatch: boolean
+    autoMatchModel: boolean
   }>
 }>

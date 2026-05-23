@@ -66,7 +66,8 @@ describe('config loader', () => {
     expect(merged.permissions.allowedCommands).toEqual(['pnpm test'])
     expect(merged.permissions.allowAllCommands).toBe(true)
     expect(merged.skills.enabled).toBe(false)
-    expect(merged.skills.autoMatch).toBe(false)
+    expect(merged.skills.autoMatch).toBe(true)
+    expect(merged.skills.autoMatchModel).toBe(true)
     expect(merged.model).toBe(DEFAULT_CONFIG.model)
   })
 
@@ -98,8 +99,11 @@ describe('config loader', () => {
   })
 
   it('throws for invalid skill config', () => {
-    expect(() => validateConfig({ ...DEFAULT_CONFIG, skills: { enabled: 'yes', autoMatch: false } } as never)).toThrow(
+    expect(() => validateConfig({ ...DEFAULT_CONFIG, skills: { enabled: 'yes', autoMatch: false, autoMatchModel: true } } as never)).toThrow(
       'Invalid config field "skills.enabled": expected boolean',
+    )
+    expect(() => validateConfig({ ...DEFAULT_CONFIG, skills: { enabled: true, autoMatch: true, autoMatchModel: 'yes' } } as never)).toThrow(
+      'Invalid config field "skills.autoMatchModel": expected boolean',
     )
   })
 
