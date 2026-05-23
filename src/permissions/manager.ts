@@ -1,4 +1,5 @@
 import type { Tool } from '../tools/types.js'
+import type { SkillAllowedTool } from '../skills/types.js'
 import {
   commandMatchesPattern,
   defaultDecisionForTool,
@@ -32,6 +33,7 @@ export class PermissionManager {
   private allowAllCommands: boolean
   private alwaysAllowedTools = new Set<string>()
   private alwaysAllowedBashCommands: string[] = []
+  private temporaryAllowlist: SkillAllowedTool[] = []
   private rememberBashCommand?: (command: string) => Promise<void>
   private confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 
@@ -40,6 +42,16 @@ export class PermissionManager {
     this.allowAllCommands = options.allowAllCommands ?? false
     this.rememberBashCommand = options.rememberBashCommand
     this.confirm = options.confirm
+  }
+
+  async withTemporaryAllowlist<T>(allowlist: SkillAllowedTool[], callback: () => Promise<T>): Promise<T> {
+    const previous = this.temporaryAllowlist
+    this.temporaryAllowlist = allowlist
+    try {
+      return await callback()
+    } finally {
+      this.temporaryAllowlist = previous
+    }
   }
 
   async check(tool: Tool, args: Record<string, unknown>): Promise<PermissionResult> {
@@ -83,6 +95,10 @@ export class PermissionManager {
         return { decision: 'deny', reason: 'Dangerous command denied' }
       }
 
+      if (this.temporaryAllowlist.some((entry) => entry.tool === 'bash' && entry.command === command)) {
+        return { decision: 'allow', reason: 'Allowed by active skill' }
+      }
+
       if (this.allowAllCommands) {
         return { decision: 'allow', reason: 'All commands are allowed by configuration' }
       }
@@ -94,6 +110,8 @@ export class PermissionManager {
       if (this.allowedCommands.some((pattern) => commandMatchesPattern(command, pattern))) {
         return { decision: 'allow', reason: 'Command is allowed by configuration' }
       }
+    } else if (this.temporaryAllowlist.some((entry) => entry.tool === tool.name && !entry.command)) {
+      return { decision: 'allow', reason: 'Allowed by active skill' }
     }
 
     const decision = defaultDecisionForTool(tool.name, tool.requiresPermission)

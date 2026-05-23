@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SLASH_COMMANDS, matchSlashCommands } from '../../src/cli/commands.js'
+import { SLASH_COMMANDS, getSlashCommands, matchSlashCommands } from '../../src/cli/commands.js'
 
 describe('slash commands', () => {
   it('defines ds-code command palette entries', () => {
@@ -14,6 +14,13 @@ describe('slash commands', () => {
     expect(matchSlashCommands('/c').map((command) => command.name)).toEqual(['/clear', '/compact', '/cost'])
     expect(matchSlashCommands('/e').map((command) => command.name)).toEqual(['/exit'])
     expect(matchSlashCommands('/x')).toEqual([])
+  })
+
+  it('matches dynamic skill commands', () => {
+    const skills = [{ name: 'review', description: 'Review changes' }]
+
+    expect(getSlashCommands(skills as never).map((command) => command.name)).toContain('/review')
+    expect(matchSlashCommands('/r', skills as never).map((command) => command.name)).toEqual(['/resume', '/review'])
   })
 
   it('only matches slash-prefixed input', () => {

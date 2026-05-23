@@ -86,6 +86,10 @@ export function mergeConfig(base: DsCodeConfig, override: PartialDsCodeConfig): 
       ...base.permissions,
       ...pickPermissionFields(override.permissions),
     },
+    skills: {
+      ...base.skills,
+      ...pickSkillFields(override.skills),
+    },
   }
 }
 
@@ -127,6 +131,18 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
     throw new ConfigError('Invalid config field "permissions.allowAllCommands": expected boolean')
   }
 
+  if (!config.skills || typeof config.skills !== 'object') {
+    throw new ConfigError('Invalid config field "skills": expected object')
+  }
+
+  if (typeof config.skills.enabled !== 'boolean') {
+    throw new ConfigError('Invalid config field "skills.enabled": expected boolean')
+  }
+
+  if (typeof config.skills.autoMatch !== 'boolean') {
+    throw new ConfigError('Invalid config field "skills.autoMatch": expected boolean')
+  }
+
   return config
 }
 
@@ -166,5 +182,13 @@ function pickPermissionFields(permissions: PartialDsCodeConfig['permissions']): 
   if (!permissions) return result
   if ('allowedCommands' in permissions) result.allowedCommands = permissions.allowedCommands
   if ('allowAllCommands' in permissions) result.allowAllCommands = permissions.allowAllCommands
+  return result
+}
+
+function pickSkillFields(skills: PartialDsCodeConfig['skills']): Partial<DsCodeConfig['skills']> {
+  const result: Partial<DsCodeConfig['skills']> = {}
+  if (!skills) return result
+  if ('enabled' in skills) result.enabled = skills.enabled
+  if ('autoMatch' in skills) result.autoMatch = skills.autoMatch
   return result
 }

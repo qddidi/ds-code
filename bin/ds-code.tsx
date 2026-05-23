@@ -56,6 +56,8 @@ render(
     ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
     allowedCommands: options.allowedCommands,
     allowAllCommands: options.allowAllCommands,
+    skillsEnabled: options.skillsEnabled,
+    skillsAutoMatch: options.skillsAutoMatch,
     ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     resume: options.resume,
   }),

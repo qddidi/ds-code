@@ -60,10 +60,13 @@ describe('config loader', () => {
       permissions: { ...DEFAULT_CONFIG.permissions, allowedCommands: ['npm test', 'git status'] },
     }, {
       permissions: { allowedCommands: ['pnpm test'], allowAllCommands: true },
+      skills: { enabled: false },
     })
 
     expect(merged.permissions.allowedCommands).toEqual(['pnpm test'])
     expect(merged.permissions.allowAllCommands).toBe(true)
+    expect(merged.skills.enabled).toBe(false)
+    expect(merged.skills.autoMatch).toBe(false)
     expect(merged.model).toBe(DEFAULT_CONFIG.model)
   })
 
@@ -91,6 +94,12 @@ describe('config loader', () => {
   it('throws for invalid provider names', () => {
     expect(() => validateConfig({ ...DEFAULT_CONFIG, provider: 'bad' } as never)).toThrow(
       'Invalid config field "provider"',
+    )
+  })
+
+  it('throws for invalid skill config', () => {
+    expect(() => validateConfig({ ...DEFAULT_CONFIG, skills: { enabled: 'yes', autoMatch: false } } as never)).toThrow(
+      'Invalid config field "skills.enabled": expected boolean',
     )
   })
 

@@ -11,4 +11,8 @@ export const DEFAULT_CONFIG: DsCodeConfig = {
     allowedCommands: [],
     allowAllCommands: false,
   },
+  skills: {
+    enabled: true,
+    autoMatch: false,
+  },
 }

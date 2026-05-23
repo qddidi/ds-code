@@ -20,12 +20,17 @@ import { listDirTool } from '../tools/list-dir.js'
 import { bashTool } from '../tools/bash.js'
 import { PermissionManager } from '../permissions/manager.js'
 import { SessionStore, type SessionData } from '../core/session.js'
-import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './commands.js'
+import { getSlashCommands, matchSlashCommands, type SlashCommand } from './commands.js'
 import { resolveModelCommand } from './model.js'
 import { NAME, VERSION } from '../index.js'
 import { rememberAllowedCommand, loadAgentInstructions } from '../config/loader.js'
 import { defaultSystemPrompt } from '../core/message.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
+import { loadSkillMetadata } from '../skills/metadata-loader.js'
+import { loadSkillActivation } from '../skills/activation-loader.js'
+import { SkillRegistry } from '../skills/registry.js'
+import { formatActivationSummary, formatSkillActivationPrompt, formatSkillDetail, formatSkillIndex, formatSkillsList } from '../skills/formatter.js'
+import type { SkillActivationRequest } from '../skills/types.js'
 
 export interface AppProps {
   provider?: Provider
@@ -34,17 +39,25 @@ export interface AppProps {
   baseUrl?: string
   allowedCommands?: string[]
   allowAllCommands?: boolean
+  skillsEnabled?: boolean
+  skillsAutoMatch?: boolean
   systemPrompt?: string
   initialPrompt?: string
   resume?: boolean
 }
 
 type PermissionAnswer = 'yes' | 'always' | 'no'
+type SkillAnswer = 'yes' | 'no'
 
 interface PermissionReq {
   tool: string
   args: Record<string, unknown>
   resolve: (answer: PermissionAnswer) => void
+}
+
+interface SkillReq {
+  request: SkillActivationRequest
+  resolve: (answer: SkillAnswer) => void
 }
 
 interface ToolEntry {
@@ -61,7 +74,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = false, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -71,6 +84,8 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const [toolHistory, setToolHistory] = useState<ToolEntry[]>([])
   const [permReq, setPermReq] = useState<PermissionReq | null>(null)
   const [permIdx, setPermIdx] = useState(0)
+  const [skillReq, setSkillReq] = useState<SkillReq | null>(null)
+  const [skillIdx, setSkillIdx] = useState(0)
   const [inputValue, setInputValue] = useState('')
   const [matches, setMatches] = useState<SlashCommand[]>([])
   const [matchIdx, setMatchIdx] = useState(0)
@@ -84,7 +99,11 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const agentRef = React.useRef<Agent | null>(null)
   const clientRef = React.useRef<DeepSeekClient | null>(null)
   const registryRef = React.useRef<ToolRegistry | null>(null)
+  const permissionManagerRef = React.useRef<PermissionManager | null>(null)
+  const skillRegistryRef = React.useRef<SkillRegistry | null>(null)
   const abortRef = React.useRef<AbortController | null>(null)
+  const pendingInputsRef = React.useRef<string[]>([])
+  const runningRef = React.useRef(false)
   const bufferRef = React.useRef('')
   const flushRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
   const sessionRef = React.useRef<SessionData | null>(null)
@@ -99,7 +118,9 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       const cwd = process.cwd()
       const agentInstructions = await loadAgentInstructions(cwd)
-      const defaultPrompt = defaultSystemPrompt({ cwd, agentInstructions })
+      const skillMetadata = skillsEnabled ? await loadSkillMetadata({ projectDir: cwd }) : { skills: [], warnings: [] }
+      const skillRegistry = new SkillRegistry(skillMetadata.skills, skillMetadata.warnings)
+      const defaultPrompt = defaultSystemPrompt({ cwd, agentInstructions }) + formatSkillIndex(skillRegistry.list())
 
       const registry = new ToolRegistry()
       registry.register(readTool)
@@ -153,6 +174,8 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       agentRef.current = agent
       clientRef.current = client
       registryRef.current = registry
+      permissionManagerRef.current = permissionManager
+      skillRegistryRef.current = skillRegistry
       setReady(true)
 
       if (initialPrompt) {
@@ -183,6 +206,26 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         permReq.resolve('no')
         setPermReq(null)
         setPermIdx(0)
+      }
+      return
+    }
+
+    if (skillReq) {
+      const answers: SkillAnswer[] = ['yes', 'no']
+      if (key.upArrow || key.downArrow) {
+        setSkillIdx((prev) => prev === 0 ? 1 : 0)
+        return
+      }
+      if (key.return || key.tab) {
+        skillReq.resolve(answers[skillIdx] ?? 'no')
+        setSkillReq(null)
+        setSkillIdx(0)
+        return
+      }
+      if (key.escape) {
+        skillReq.resolve('no')
+        setSkillReq(null)
+        setSkillIdx(0)
       }
       return
     }
@@ -266,7 +309,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     setCommandOutput('')
 
     if (value.startsWith('/') && !value.includes(' ')) {
-      const m = matchSlashCommands(value)
+      const m = matchSlashCommands(value, skillRegistryRef.current?.list() ?? [])
       setMatches(m)
       setMatchIdx(0)
     } else {
@@ -287,7 +330,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         setMultiline(false)
         const full = multilineBuffer.join('\n')
         setMultilineBuffer([])
-        if (full.trim()) await runAgent(full)
+        if (full.trim()) enqueueAgentInput(full)
       } else {
         setMultilineBuffer((prev) => [...prev, text])
       }
@@ -306,11 +349,33 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       return
     }
 
-    await runAgent(text)
+    enqueueAgentInput(text)
   }
 
-  const runAgent = async (input: string): Promise<void> => {
+  const enqueueAgentInput = (input: string): void => {
+    pendingInputsRef.current.push(input)
+    if (!runningRef.current) {
+      void runNextAgentInput()
+    }
+  }
+
+  const runNextAgentInput = async (): Promise<void> => {
+    if (runningRef.current) return
+    const next = pendingInputsRef.current.shift()
+    if (!next) return
+
+    runningRef.current = true
+    try {
+      await runAgent(next)
+    } finally {
+      runningRef.current = false
+      void runNextAgentInput()
+    }
+  }
+
+  const runAgent = async (input: string, allowedTools: SkillActivationRequest['metadata']['allowedTools'] = []): Promise<void> => {
     const agent = agentRef.current
+    const permissionManager = permissionManagerRef.current
     if (!agent) return
 
     setMessages((prev) => [...prev, { id: nextId(), role: 'user', content: input }])
@@ -329,61 +394,68 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     }, 16)
 
     try {
-      await agent.run(
-        input,
-        {
-          onContent: (chunk) => {
-            setToolHistory((h) => {
-              if (bufferRef.current === '' && h.length > 0) {
-                for (const t of h) {
-                  setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+      const execute = async (): Promise<void> => {
+        await agent.run(
+          input,
+          {
+            onContent: (chunk) => {
+              setToolHistory((h) => {
+                if (bufferRef.current === '' && h.length > 0) {
+                  for (const t of h) {
+                    setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+                  }
+                  return []
                 }
-                return []
+                return h
+              })
+              setStatus('streaming')
+              bufferRef.current += chunk
+            },
+            onThinking: () => {
+              setStatus('thinking')
+            },
+            onToolCallStart: () => {
+              if (bufferRef.current) {
+                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+                bufferRef.current = ''
+                setStreamingText('')
               }
-              return h
-            })
-            setStatus('streaming')
-            bufferRef.current += chunk
-          },
-          onThinking: () => {
-            setStatus('thinking')
-          },
-          onToolCallStart: () => {
-            if (bufferRef.current) {
-              setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
-              bufferRef.current = ''
-              setStreamingText('')
-            }
-            setStatus('thinking')
-          },
-          onToolCall: (name, args) => {
-            if (bufferRef.current) {
-              setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
-              bufferRef.current = ''
-              setStreamingText('')
-            }
-            setStatus('tool')
-            let parsed: Record<string, unknown> = {}
-            try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
-            const entry: ToolEntry = { name, args: parsed, done: false, error: false }
-            setCurrentTool(entry)
-          },
-          onToolResult: (_name, _result, isError) => {
-            setCurrentTool((prev) => {
-              if (prev) {
-                const completed = { ...prev, done: true, error: isError ?? false }
-                setToolHistory((h) => [...h, completed])
+              setStatus('thinking')
+            },
+            onToolCall: (name, args) => {
+              if (bufferRef.current) {
+                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+                bufferRef.current = ''
+                setStreamingText('')
               }
-              return null
-            })
-            setStatus('thinking')
+              setStatus('tool')
+              let parsed: Record<string, unknown> = {}
+              try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
+              const entry: ToolEntry = { name, args: parsed, done: false, error: false }
+              setCurrentTool(entry)
+            },
+            onToolResult: (_name, _result, isError) => {
+              setCurrentTool((prev) => {
+                if (prev) {
+                  const completed = { ...prev, done: true, error: isError ?? false }
+                  setToolHistory((h) => [...h, completed])
+                }
+                return null
+              })
+              setStatus('thinking')
+            },
+            onMaxIterations: () => {
+              setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: 'Reached maximum iterations.' }])
+            },
           },
-          onMaxIterations: () => {
-            setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: 'Reached maximum iterations.' }])
-          },
-        },
-        controller.signal,
-      )
+          controller.signal,
+        )
+      }
+      if (allowedTools.length > 0 && permissionManager) {
+        await permissionManager.withTemporaryAllowlist(allowedTools, execute)
+      } else {
+        await execute()
+      }
 
       setToolHistory((h) => {
         for (const t of h) {
@@ -422,7 +494,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     switch (cmd) {
       case '/help':
         setCommandOutput(
-          SLASH_COMMANDS.map((c) => `  ${c.name.padEnd(12)} ${c.description}`).join('\n')
+          getSlashCommands(skillRegistryRef.current?.list() ?? []).map((c) => `  ${c.name.padEnd(12)} ${c.description}`).join('\n')
         )
         break
       case '/clear':
@@ -481,6 +553,20 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         }
         break
       }
+      case '/skills': {
+        const skillRegistry = skillRegistryRef.current
+        if (!skillRegistry) {
+          setCommandOutput('Skills are disabled.')
+        } else if (parts[1]) {
+          const skill = skillRegistry.get(parts[1])
+          setCommandOutput(skill ? formatSkillDetail(skill) : `Unknown skill: ${parts[1]}`)
+        } else {
+          const warnings = skillRegistry.getWarnings()
+          const warningOutput = warnings.length > 0 ? `\n\nWarnings:\n${warnings.map((warning) => `  - ${warning.path}: ${warning.message}`).join('\n')}` : ''
+          setCommandOutput(formatSkillsList(skillRegistry.list()) + warningOutput)
+        }
+        break
+      }
       case '/cost': {
         const msgs = agentRef.current?.getMessages() ?? []
         const tokens = estimateMessagesTokens(msgs)
@@ -488,6 +574,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         break
       }
       case '/doctor': {
+        const skillRegistry = skillRegistryRef.current
         const checks = [
           `Node:      ${process.version}`,
           `Platform:  ${process.platform} ${process.arch}`,
@@ -497,6 +584,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
           `Model:     ${clientRef.current?.getModel() ?? 'unknown'}`,
           `CWD:       ${process.cwd()}`,
           `Session:   ${sessionRef.current?.id ?? 'none'}`,
+          `Skills:    ${skillsEnabled ? `${skillRegistry?.list().length ?? 0} loaded, autoMatch=${skillsAutoMatch}, warnings=${skillRegistry?.getWarnings().length ?? 0}` : 'disabled'}`,
         ]
         setCommandOutput(checks.join('\n'))
         break
@@ -517,8 +605,34 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       case '/version':
         setCommandOutput(`${NAME} v${VERSION}`)
         break
-      default:
-        setCommandOutput(`Unknown command: ${cmd}`)
+      default: {
+        const skillName = cmd?.slice(1) ?? ''
+        const skill = skillRegistryRef.current?.get(skillName)
+        if (skill) {
+          void requestSkillActivation({ metadata: skill, userArgs: parts.slice(1).join(' ') })
+        } else {
+          setCommandOutput(`Unknown command: ${cmd}`)
+        }
+      }
+    }
+  }
+
+  const requestSkillActivation = async (request: SkillActivationRequest): Promise<void> => {
+    const answer = await new Promise<SkillAnswer>((resolve) => {
+      setSkillIdx(0)
+      setSkillReq({ request, resolve })
+    })
+    if (answer === 'no') {
+      setCommandOutput(`Skill not activated: ${request.metadata.name}`)
+      return
+    }
+
+    try {
+      const skill = await loadSkillActivation(request.metadata)
+      const prompt = formatSkillActivationPrompt(skill, request.userArgs)
+      await runAgent(prompt, skill.metadata.allowedTools)
+    } catch (err) {
+      setCommandOutput(`Failed to activate skill: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -582,6 +696,24 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         <PermissionPrompt tool={permReq.tool} args={permReq.args} selectedIndex={permIdx} />
       )}
 
+      {skillReq && (
+        <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+          <Text color="yellow" bold>Skill activation</Text>
+          <Text>{formatActivationSummary(skillReq.request.metadata)}</Text>
+          <Text> </Text>
+          {['Yes', 'No'].map((label, index) => {
+            const selected = index === skillIdx
+            return (
+              <Text key={label}>
+                <Text color={selected ? 'cyan' : 'gray'}>{selected ? '❯' : ' '} </Text>
+                <Text color={selected ? (index === 0 ? 'green' : 'red') : 'white'} bold={selected}>{label}</Text>
+              </Text>
+            )
+          })}
+          <Text dimColor>  ↑↓ navigate  ⏎ select  Esc deny</Text>
+        </Box>
+      )}
+
       {commandOutput && (
         <Box marginBottom={1}>
           <Text dimColor>{commandOutput}</Text>
@@ -617,7 +749,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
           value={inputValue}
           onChange={handleInputChange}
           onSubmit={handleSubmit}
-          focus={status === 'idle' && !permReq && !modelPicker}
+          focus={!permReq && !skillReq && !modelPicker}
         />
       </Box>
     </Box>

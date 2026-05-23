@@ -104,4 +104,39 @@ describe('PermissionManager', () => {
     expect(result.decision).toBe('deny')
     expect(confirm).not.toHaveBeenCalled()
   })
+
+  it('allows temporary skill tools only inside the scope', async () => {
+    const confirm = vi.fn(async () => 'allow_once' as const)
+    const manager = new PermissionManager({ confirm })
+
+    await manager.withTemporaryAllowlist([{ tool: 'write_file' }], async () => {
+      await expect(manager.check(writeTool, { file_path: 'a.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+    })
+
+    await expect(manager.check(writeTool, { file_path: 'b.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows temporary skill bash commands with exact matching', async () => {
+    const confirm = vi.fn(async () => 'allow_once' as const)
+    const manager = new PermissionManager({ confirm })
+
+    await manager.withTemporaryAllowlist([{ tool: 'bash', command: 'git status' }], async () => {
+      await expect(manager.check(bashTool, { command: 'git status' })).resolves.toMatchObject({ decision: 'allow' })
+      await expect(manager.check(bashTool, { command: 'git status --short' })).resolves.toMatchObject({ decision: 'allow' })
+    })
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('denies dangerous bash commands even when a skill allows them', async () => {
+    const confirm = vi.fn()
+    const manager = new PermissionManager({ confirm })
+
+    await manager.withTemporaryAllowlist([{ tool: 'bash', command: 'rm -rf /' }], async () => {
+      await expect(manager.check(bashTool, { command: 'rm -rf /' })).resolves.toMatchObject({ decision: 'deny' })
+    })
+
+    expect(confirm).not.toHaveBeenCalled()
+  })
 })

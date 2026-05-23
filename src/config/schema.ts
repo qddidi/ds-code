@@ -12,6 +12,10 @@ export interface DsCodeConfig {
     allowedCommands: string[]
     allowAllCommands: boolean
   }
+  skills: {
+    enabled: boolean
+    autoMatch: boolean
+  }
 }
 
 export type PartialDsCodeConfig = Partial<{
@@ -25,5 +29,9 @@ export type PartialDsCodeConfig = Partial<{
   permissions: Partial<{
     allowedCommands: string[]
     allowAllCommands: boolean
+  }>
+  skills: Partial<{
+    enabled: boolean
+    autoMatch: boolean
   }>
 }>
