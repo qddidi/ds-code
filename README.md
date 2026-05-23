@@ -60,7 +60,8 @@ OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
     "allowedCommands": [
       "git status",
       "pnpm test"
-    ]
+    ],
+    "allowAllCommands": false
   }
 }
 ```
@@ -77,6 +78,7 @@ OpenAI-compatible 中转站可通过配置文件或 CLI 指定：
 | `temperature` | 采样温度 |
 | `timeout` | 请求超时时间，单位毫秒 |
 | `permissions.allowedCommands` | 预允许执行的 Bash 命令，支持以 `*` 结尾的前缀匹配 |
+| `permissions.allowAllCommands` | 允许所有非危险 Bash 命令；危险命令仍会被拒绝 |
 
 `AGENTS.md` 可放在项目目录或父目录中，用于提供项目级 AI 指令；启动时会读取离当前目录最近的一个。
 

@@ -9,5 +9,6 @@ export const DEFAULT_CONFIG: DsCodeConfig = {
   timeout: 120_000,
   permissions: {
     allowedCommands: [],
+    allowAllCommands: false,
   },
 }

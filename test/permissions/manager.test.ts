@@ -36,6 +36,15 @@ describe('PermissionManager', () => {
     expect(confirm).not.toHaveBeenCalled()
   })
 
+  it('allows all configured bash commands except dangerous commands', async () => {
+    const confirm = vi.fn()
+    const manager = new PermissionManager({ allowAllCommands: true, confirm })
+
+    await expect(manager.check(bashTool, { command: 'git push' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(bashTool, { command: 'rm -rf /' })).resolves.toMatchObject({ decision: 'deny' })
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
   it('requires confirmation for ordinary bash commands', async () => {
     const confirm = vi.fn(async () => 'allow_once' as const)
     const manager = new PermissionManager({ confirm })

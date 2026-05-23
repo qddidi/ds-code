@@ -123,6 +123,10 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
     throw new ConfigError('Invalid config field "permissions.allowedCommands": expected string array')
   }
 
+  if (typeof config.permissions.allowAllCommands !== 'boolean') {
+    throw new ConfigError('Invalid config field "permissions.allowAllCommands": expected boolean')
+  }
+
   return config
 }
 
@@ -161,5 +165,6 @@ function pickPermissionFields(permissions: PartialDsCodeConfig['permissions']): 
   const result: Partial<DsCodeConfig['permissions']> = {}
   if (!permissions) return result
   if ('allowedCommands' in permissions) result.allowedCommands = permissions.allowedCommands
+  if ('allowAllCommands' in permissions) result.allowAllCommands = permissions.allowAllCommands
   return result
 }

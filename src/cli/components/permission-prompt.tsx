@@ -1,21 +1,19 @@
 import React from 'react'
-import { Box, Text, useInput } from 'ink'
+import { Box, Text } from 'ink'
 
 interface PermissionPromptProps {
   tool: string
   args: Record<string, unknown>
-  onResolve?: (answer: 'yes' | 'always' | 'no') => void
+  selectedIndex: number
 }
 
-export function PermissionPrompt({ tool, args, onResolve }: PermissionPromptProps): React.ReactElement {
-  useInput((input) => {
-    if (!onResolve) return
-    const key = input.toLowerCase()
-    if (key === 'y') onResolve('yes')
-    else if (key === 'a') onResolve('always')
-    else if (key === 'n') onResolve('no')
-  })
+const OPTIONS = [
+  { label: 'Yes', description: 'allow once', color: 'green' },
+  { label: 'Always', description: 'allow matching requests', color: 'blue' },
+  { label: 'No', description: 'deny', color: 'red' },
+] as const
 
+export function PermissionPrompt({ tool, args, selectedIndex }: PermissionPromptProps): React.ReactElement {
   const summary = tool === 'bash'
     ? String(args.command ?? '')
     : tool === 'write_file' || tool === 'edit_file'
@@ -30,11 +28,17 @@ export function PermissionPrompt({ tool, args, onResolve }: PermissionPromptProp
         <Text dimColor> {summary}</Text>
       </Text>
       <Text> </Text>
-      <Text>
-        <Text color="green" bold>[Y]</Text><Text>es  </Text>
-        <Text color="blue" bold>[A]</Text><Text>lways  </Text>
-        <Text color="red" bold>[N]</Text><Text>o</Text>
-      </Text>
+      {OPTIONS.map((option, index) => {
+        const selected = index === selectedIndex
+        return (
+          <Text key={option.label}>
+            <Text color={selected ? 'cyan' : 'gray'}>{selected ? '❯' : ' '} </Text>
+            <Text color={selected ? option.color : 'white'} bold={selected}>{option.label}</Text>
+            <Text dimColor> — {option.description}</Text>
+          </Text>
+        )
+      })}
+      <Text dimColor>  ↑↓ navigate  ⏎ select  Esc deny</Text>
     </Box>
   )
 }

@@ -33,15 +33,18 @@ export interface AppProps {
   model?: string
   baseUrl?: string
   allowedCommands?: string[]
+  allowAllCommands?: boolean
   systemPrompt?: string
   initialPrompt?: string
   resume?: boolean
 }
 
+type PermissionAnswer = 'yes' | 'always' | 'no'
+
 interface PermissionReq {
   tool: string
   args: Record<string, unknown>
-  resolve: (answer: 'yes' | 'always' | 'no') => void
+  resolve: (answer: PermissionAnswer) => void
 }
 
 interface ToolEntry {
@@ -58,7 +61,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -67,6 +70,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const [currentTool, setCurrentTool] = useState<ToolEntry | null>(null)
   const [toolHistory, setToolHistory] = useState<ToolEntry[]>([])
   const [permReq, setPermReq] = useState<PermissionReq | null>(null)
+  const [permIdx, setPermIdx] = useState(0)
   const [inputValue, setInputValue] = useState('')
   const [matches, setMatches] = useState<SlashCommand[]>([])
   const [matchIdx, setMatchIdx] = useState(0)
@@ -108,9 +112,11 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       const permissionManager = new PermissionManager({
         allowedCommands,
+        allowAllCommands,
         rememberBashCommand: rememberAllowedCommand,
         confirm: async (request) => {
           return new Promise((resolve) => {
+            setPermIdx(0)
             setPermReq({
               tool: request.toolName,
               args: request.args,
@@ -158,10 +164,26 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
   useInput((input, key) => {
     if (permReq) {
-      const k = input.toLowerCase()
-      if (k === 'y') { permReq.resolve('yes'); setPermReq(null) }
-      else if (k === 'a') { permReq.resolve('always'); setPermReq(null) }
-      else if (k === 'n') { permReq.resolve('no'); setPermReq(null) }
+      const answers: PermissionAnswer[] = ['yes', 'always', 'no']
+      if (key.upArrow) {
+        setPermIdx((prev) => (prev - 1 + answers.length) % answers.length)
+        return
+      }
+      if (key.downArrow) {
+        setPermIdx((prev) => (prev + 1) % answers.length)
+        return
+      }
+      if (key.return || key.tab) {
+        permReq.resolve(answers[permIdx] ?? 'no')
+        setPermReq(null)
+        setPermIdx(0)
+        return
+      }
+      if (key.escape) {
+        permReq.resolve('no')
+        setPermReq(null)
+        setPermIdx(0)
+      }
       return
     }
 
@@ -557,7 +579,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       {status === 'streaming' && streamingText && <StreamingText text={streamingText} />}
 
       {permReq && (
-        <PermissionPrompt tool={permReq.tool} args={permReq.args} />
+        <PermissionPrompt tool={permReq.tool} args={permReq.args} selectedIndex={permIdx} />
       )}
 
       {commandOutput && (

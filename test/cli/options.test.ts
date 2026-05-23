@@ -48,10 +48,11 @@ describe('CLI options', () => {
   it('passes configured allowed commands through to the app options', () => {
     const options = resolveCliOptions([], {
       ...DEFAULT_CONFIG,
-      permissions: { allowedCommands: ['git status', 'pnpm test*'] },
+      permissions: { allowedCommands: ['git status', 'pnpm test*'], allowAllCommands: true },
     }, {})
 
     expect(options.allowedCommands).toEqual(['git status', 'pnpm test*'])
+    expect(options.allowAllCommands).toBe(true)
   })
 
   it('reads named options', () => {

@@ -10,6 +10,7 @@ export interface DsCodeConfig {
   timeout: number
   permissions: {
     allowedCommands: string[]
+    allowAllCommands: boolean
   }
 }
 
@@ -23,5 +24,6 @@ export type PartialDsCodeConfig = Partial<{
   timeout: number
   permissions: Partial<{
     allowedCommands: string[]
+    allowAllCommands: boolean
   }>
 }>

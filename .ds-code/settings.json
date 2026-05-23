@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allowedCommands": [
-      "git status",
-      "git add -A",
-      "git commit -m \"chore: update project\"",
-      "git push",
-      "git commit -m *",
+      "git status*",
       "git add*"
     ]
   }

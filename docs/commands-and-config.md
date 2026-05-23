@@ -46,7 +46,8 @@ pnpm build
   "temperature": 0,
   "timeout": 60000,
   "permissions": {
-    "allowedCommands": ["pnpm test", "pnpm build"]
+    "allowedCommands": ["pnpm test", "pnpm build"],
+    "allowAllCommands": false
   }
 }
 ```

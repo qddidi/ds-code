@@ -57,12 +57,13 @@ describe('config loader', () => {
   it('deep merges objects and replaces arrays', () => {
     const merged = mergeConfig({
       ...DEFAULT_CONFIG,
-      permissions: { allowedCommands: ['npm test', 'git status'] },
+      permissions: { ...DEFAULT_CONFIG.permissions, allowedCommands: ['npm test', 'git status'] },
     }, {
-      permissions: { allowedCommands: ['pnpm test'] },
+      permissions: { allowedCommands: ['pnpm test'], allowAllCommands: true },
     })
 
     expect(merged.permissions.allowedCommands).toEqual(['pnpm test'])
+    expect(merged.permissions.allowAllCommands).toBe(true)
     expect(merged.model).toBe(DEFAULT_CONFIG.model)
   })
 

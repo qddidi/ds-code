@@ -11,6 +11,7 @@ export type PermissionResponse = 'allow_once' | 'allow_always' | 'deny'
 
 export interface PermissionManagerOptions {
   allowedCommands?: string[]
+  allowAllCommands?: boolean
   rememberBashCommand?: (command: string) => Promise<void>
   confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 }
@@ -28,6 +29,7 @@ export interface PermissionResult {
 
 export class PermissionManager {
   private allowedCommands: string[]
+  private allowAllCommands: boolean
   private alwaysAllowedTools = new Set<string>()
   private alwaysAllowedBashCommands: string[] = []
   private rememberBashCommand?: (command: string) => Promise<void>
@@ -35,6 +37,7 @@ export class PermissionManager {
 
   constructor(options: PermissionManagerOptions = {}) {
     this.allowedCommands = options.allowedCommands ?? []
+    this.allowAllCommands = options.allowAllCommands ?? false
     this.rememberBashCommand = options.rememberBashCommand
     this.confirm = options.confirm
   }
@@ -78,6 +81,10 @@ export class PermissionManager {
 
       if (isDangerousBashCommand(command)) {
         return { decision: 'deny', reason: 'Dangerous command denied' }
+      }
+
+      if (this.allowAllCommands) {
+        return { decision: 'allow', reason: 'All commands are allowed by configuration' }
       }
 
       if (this.alwaysAllowedBashCommands.some((pattern) => commandMatchesPattern(command, pattern))) {
