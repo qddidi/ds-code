@@ -9,3 +9,4 @@ src/**/*.d.ts
 src/**/*.js.map
 src/**/*.d.ts.map
 .claude/
+.ds-code/
