@@ -2,25 +2,29 @@ import { describe, it, expect } from 'vitest'
 import { SLASH_COMMANDS, getSlashCommands, matchSlashCommands } from '../../src/cli/commands.js'
 
 describe('slash commands', () => {
-  it('defines ds-code command palette entries', () => {
-    expect(SLASH_COMMANDS.map((command) => command.name)).toContain('/help')
-    expect(SLASH_COMMANDS.map((command) => command.name)).toContain('/tools')
-    expect(SLASH_COMMANDS.map((command) => command.name)).toContain('/model')
-    expect(SLASH_COMMANDS.length).toBeGreaterThan(3)
+  it('defines only user-facing command palette entries', () => {
+    expect(SLASH_COMMANDS.map((command) => command.name)).toEqual([
+      '/help',
+      '/clear',
+      '/model',
+      '/skills',
+      '/resume',
+      '/compact',
+      '/cost',
+      '/exit',
+    ])
   })
 
   it('matches commands every time the input changes', () => {
-    expect(matchSlashCommands('/').length).toBeGreaterThan(3)
+    expect(matchSlashCommands('/').map((command) => command.name)).toEqual(getSlashCommands().map((command) => command.name))
     expect(matchSlashCommands('/c').map((command) => command.name)).toEqual(['/clear', '/compact', '/cost'])
     expect(matchSlashCommands('/e').map((command) => command.name)).toEqual(['/exit'])
     expect(matchSlashCommands('/x')).toEqual([])
   })
 
-  it('matches dynamic skill commands', () => {
-    const skills = [{ name: 'review', description: 'Review changes' }]
-
-    expect(getSlashCommands(skills as never).map((command) => command.name)).toContain('/review')
-    expect(matchSlashCommands('/r', skills as never).map((command) => command.name)).toEqual(['/resume', '/review'])
+  it('does not expose dynamic skill commands in slash suggestions', () => {
+    expect(getSlashCommands().map((command) => command.name)).not.toContain('/review')
+    expect(matchSlashCommands('/r').map((command) => command.name)).toEqual(['/resume'])
   })
 
   it('only matches slash-prefixed input', () => {

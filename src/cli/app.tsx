@@ -29,9 +29,9 @@ import { estimateMessagesTokens } from '../utils/token-count.js'
 import { loadSkillMetadata } from '../skills/metadata-loader.js'
 import { loadSkillActivation } from '../skills/activation-loader.js'
 import { SkillRegistry } from '../skills/registry.js'
-import { formatActivationSummary, formatSkillActivationPrompt, formatSkillDetail, formatSkillIndex, formatSkillsList } from '../skills/formatter.js'
+import { formatActivationSummary, formatSkillActivationPrompt, formatSkillDetail, formatSkillIndex } from '../skills/formatter.js'
 import { matchSkill, matchSkillWithModel } from '../skills/matcher.js'
-import type { SkillActivationRequest } from '../skills/types.js'
+import type { SkillActivationRequest, SkillMetadata } from '../skills/types.js'
 
 export interface AppProps {
   provider?: Provider
@@ -97,6 +97,8 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const [commandOutput, setCommandOutput] = useState('')
   const [modelPicker, setModelPicker] = useState(false)
   const [modelPickerIdx, setModelPickerIdx] = useState(0)
+  const [skillPicker, setSkillPicker] = useState<SkillMetadata[]>([])
+  const [skillPickerIdx, setSkillPickerIdx] = useState(0)
 
   const agentRef = React.useRef<Agent | null>(null)
   const clientRef = React.useRef<DeepSeekClient | null>(null)
@@ -279,6 +281,32 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       return
     }
 
+    if (skillPicker.length > 0) {
+      if (key.upArrow) {
+        setSkillPickerIdx((prev) => (prev - 1 + skillPicker.length) % skillPicker.length)
+        return
+      }
+      if (key.downArrow) {
+        setSkillPickerIdx((prev) => (prev + 1) % skillPicker.length)
+        return
+      }
+      if (key.return || key.tab) {
+        const selected = skillPicker[skillPickerIdx]
+        setSkillPicker([])
+        setSkillPickerIdx(0)
+        if (selected) {
+          setInputValue(`/${selected.name} `)
+        }
+        return
+      }
+      if (key.escape) {
+        setSkillPicker([])
+        setSkillPickerIdx(0)
+        return
+      }
+      return
+    }
+
     // Autocomplete navigation
     if (matches.length > 0) {
       if (key.upArrow) {
@@ -311,7 +339,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     setCommandOutput('')
 
     if (value.startsWith('/') && !value.includes(' ')) {
-      const m = matchSlashCommands(value, skillRegistryRef.current?.list() ?? [])
+      const m = matchSlashCommands(value)
       setMatches(m)
       setMatchIdx(0)
     } else {
@@ -321,7 +349,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   }
 
   const handleSubmit = async (text: string): Promise<void> => {
-    if (matches.length > 0 || modelPicker) return
+    if (matches.length > 0 || modelPicker || skillPicker.length > 0) return
 
     setMatches([])
     setMatchIdx(0)
@@ -510,7 +538,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     switch (cmd) {
       case '/help':
         setCommandOutput(
-          getSlashCommands(skillRegistryRef.current?.list() ?? []).map((c) => `  ${c.name.padEnd(12)} ${c.description}`).join('\n')
+          getSlashCommands().map((c) => `  ${c.name.padEnd(12)} ${c.description}`).join('\n')
         )
         break
       case '/clear':
@@ -577,9 +605,14 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
           const skill = skillRegistry.get(parts[1])
           setCommandOutput(skill ? formatSkillDetail(skill) : `Unknown skill: ${parts[1]}`)
         } else {
-          const warnings = skillRegistry.getWarnings()
-          const warningOutput = warnings.length > 0 ? `\n\nWarnings:\n${warnings.map((warning) => `  - ${warning.path}: ${warning.message}`).join('\n')}` : ''
-          setCommandOutput(formatSkillsList(skillRegistry.list()) + warningOutput)
+          const skills = skillRegistry.list()
+          if (skills.length === 0) {
+            setCommandOutput('No skills found.')
+          } else {
+            setCommandOutput('')
+            setSkillPicker(skills)
+            setSkillPickerIdx(0)
+          }
         }
         break
       }
@@ -760,7 +793,25 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         </Box>
       )}
 
-      {matches.length > 0 && !modelPicker && (
+      {skillPicker.length > 0 && (
+        <Box flexDirection="column" marginBottom={0}>
+          <Box borderStyle="round" borderColor="gray" flexDirection="column" paddingLeft={1} paddingRight={1}>
+            {skillPicker.map((skill, i) => {
+              const isSelected = i === skillPickerIdx
+              return (
+                <Box key={skill.name}>
+                  <Text color={isSelected ? 'cyan' : 'gray'}>{isSelected ? '❯' : ' '} </Text>
+                  <Text color={isSelected ? 'cyan' : 'white'} bold={isSelected}>{`/${skill.name}`.padEnd(14)}</Text>
+                  <Text color="gray"> {skill.description}</Text>
+                </Box>
+              )
+            })}
+          </Box>
+          <Text dimColor>  ↑↓ navigate  ⏎/Tab select  Esc dismiss</Text>
+        </Box>
+      )}
+
+      {matches.length > 0 && !modelPicker && skillPicker.length === 0 && (
         <Autocomplete matches={matches} selectedIndex={matchIdx} />
       )}
 
@@ -770,7 +821,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
           value={inputValue}
           onChange={handleInputChange}
           onSubmit={handleSubmit}
-          focus={!permReq && !skillReq && !modelPicker}
+          focus={!permReq && !skillReq && !modelPicker && skillPicker.length === 0}
         />
       </Box>
     </Box>
