@@ -21,6 +21,7 @@ ds-code 是一个基于 Node.js + TypeScript 的交互式 AI 编程助手 CLI，
 | 多模型/多 provider | 已实现 DeepSeek/OpenAI/custom | `src/api/deepseek.ts`, `src/cli/model.ts` |
 | Git 集成 | 已实现基础状态/分支/diff 工具函数 | `src/utils/git.ts` |
 | Slash commands | 已实现 12 个命令 | `src/cli/commands.ts`, `src/cli/app.tsx` |
+| Skills | 已实现 手动与自动触发 | `src/skills/registry.ts.ts`, `src/cli/app.tsx` |
 | 测试 | 已覆盖 API、CLI、core、tools、permissions、config、utils | `test/` |
 | 子 Agent / 插件系统 | 未实现 | 待规划 |
 

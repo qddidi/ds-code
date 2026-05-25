@@ -23,7 +23,7 @@ import { SessionStore, type SessionData } from '../core/session.js'
 import { getSlashCommands, matchSlashCommands, type SlashCommand } from './commands.js'
 import { resolveModelCommand } from './model.js'
 import { NAME, VERSION } from '../index.js'
-import { rememberAllowedCommand, loadAgentInstructions } from '../config/loader.js'
+import { rememberAllowedCommand, rememberAllowedTool, loadAgentInstructions } from '../config/loader.js'
 import { defaultSystemPrompt } from '../core/message.js'
 import { estimateMessagesTokens } from '../utils/token-count.js'
 import { loadSkillMetadata } from '../skills/metadata-loader.js'
@@ -39,6 +39,7 @@ export interface AppProps {
   model?: string
   baseUrl?: string
   allowedCommands?: string[]
+  allowedTools?: string[]
   allowAllCommands?: boolean
   skillsEnabled?: boolean
   skillsAutoMatch?: boolean
@@ -76,7 +77,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -110,6 +111,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const runningRef = React.useRef(false)
   const bufferRef = React.useRef('')
   const flushRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastFlushedStreamingTextRef = React.useRef('')
   const sessionRef = React.useRef<SessionData | null>(null)
   const sessionStoreRef = React.useRef(new SessionStore())
 
@@ -137,8 +139,10 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       const permissionManager = new PermissionManager({
         allowedCommands,
+        allowedTools,
         allowAllCommands,
         rememberBashCommand: rememberAllowedCommand,
+        rememberTool: rememberAllowedTool,
         confirm: async (request) => {
           return new Promise((resolve) => {
             setPermIdx(0)
@@ -435,6 +439,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     }
     setStatus('thinking')
     setStreamingText('')
+    lastFlushedStreamingTextRef.current = ''
     setToolHistory([])
     bufferRef.current = ''
 
@@ -442,10 +447,11 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     abortRef.current = controller
 
     flushRef.current = setInterval(() => {
-      if (bufferRef.current) {
+      if (bufferRef.current && bufferRef.current !== lastFlushedStreamingTextRef.current) {
+        lastFlushedStreamingTextRef.current = bufferRef.current
         setStreamingText(bufferRef.current)
       }
-    }, 16)
+    }, 50)
 
     try {
       const execute = async (): Promise<void> => {
@@ -472,6 +478,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               if (bufferRef.current) {
                 setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
                 bufferRef.current = ''
+                lastFlushedStreamingTextRef.current = ''
                 setStreamingText('')
               }
               setStatus('thinking')
@@ -480,6 +487,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               if (bufferRef.current) {
                 setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
                 bufferRef.current = ''
+                lastFlushedStreamingTextRef.current = ''
                 setStreamingText('')
               }
               setStatus('tool')
@@ -536,6 +544,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       }
       abortRef.current = null
       setStatus('idle')
+      lastFlushedStreamingTextRef.current = ''
       setStreamingText('')
       setCurrentTool(null)
     }

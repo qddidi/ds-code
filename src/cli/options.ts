@@ -7,6 +7,7 @@ export interface CliOptions {
   model?: string
   baseUrl?: string
   allowedCommands: string[]
+  allowedTools: string[]
   allowAllCommands: boolean
   skillsEnabled: boolean
   skillsAutoMatch: boolean
@@ -21,6 +22,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
   const model = readOption(args, '--model') ?? config.model
   const baseUrl = readOption(args, '--base-url') ?? config.baseUrl
   const allowedCommands = config.permissions.allowedCommands
+  const allowedTools = config.permissions.allowedTools
   const allowAllCommands = config.permissions.allowAllCommands
   const skillsEnabled = config.skills.enabled
   const skillsAutoMatch = config.skills.autoMatch
@@ -34,6 +36,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
     model,
     baseUrl,
     allowedCommands,
+    allowedTools,
     allowAllCommands,
     skillsEnabled,
     skillsAutoMatch,

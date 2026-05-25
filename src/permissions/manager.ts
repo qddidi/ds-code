@@ -12,8 +12,10 @@ export type PermissionResponse = 'allow_once' | 'allow_always' | 'deny'
 
 export interface PermissionManagerOptions {
   allowedCommands?: string[]
+  allowedTools?: string[]
   allowAllCommands?: boolean
   rememberBashCommand?: (command: string) => Promise<void>
+  rememberTool?: (tool: string) => Promise<void>
   confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 }
 
@@ -31,26 +33,28 @@ export interface PermissionResult {
 export class PermissionManager {
   private allowedCommands: string[]
   private allowAllCommands: boolean
-  private alwaysAllowedTools = new Set<string>()
+  private alwaysAllowedTools: Set<string>
   private alwaysAllowedBashCommands: string[] = []
-  private temporaryAllowlist: SkillAllowedTool[] = []
+  private temporaryAllowlistStack: SkillAllowedTool[][] = []
   private rememberBashCommand?: (command: string) => Promise<void>
+  private rememberTool?: (tool: string) => Promise<void>
   private confirm?: (request: PermissionRequest) => Promise<PermissionResponse>
 
   constructor(options: PermissionManagerOptions = {}) {
     this.allowedCommands = options.allowedCommands ?? []
+    this.alwaysAllowedTools = new Set(options.allowedTools ?? [])
     this.allowAllCommands = options.allowAllCommands ?? false
     this.rememberBashCommand = options.rememberBashCommand
+    this.rememberTool = options.rememberTool
     this.confirm = options.confirm
   }
 
   async withTemporaryAllowlist<T>(allowlist: SkillAllowedTool[], callback: () => Promise<T>): Promise<T> {
-    const previous = this.temporaryAllowlist
-    this.temporaryAllowlist = allowlist
+    this.temporaryAllowlistStack.push([...allowlist])
     try {
       return await callback()
     } finally {
-      this.temporaryAllowlist = previous
+      this.temporaryAllowlistStack.pop()
     }
   }
 
@@ -76,6 +80,7 @@ export class PermissionManager {
         await this.rememberBashCommand?.(pattern)
       } else {
         this.alwaysAllowedTools.add(tool.name)
+        await this.rememberTool?.(tool.name)
       }
       return { decision: 'allow', reason: 'Always allowed' }
     }
@@ -95,7 +100,7 @@ export class PermissionManager {
         return { decision: 'deny', reason: 'Dangerous command denied' }
       }
 
-      if (this.temporaryAllowlist.some((entry) => entry.tool === 'bash' && entry.command === command)) {
+      if (this.isTemporarilyAllowed((entry) => entry.tool === 'bash' && entry.command === command)) {
         return { decision: 'allow', reason: 'Allowed by active skill' }
       }
 
@@ -110,7 +115,7 @@ export class PermissionManager {
       if (this.allowedCommands.some((pattern) => commandMatchesPattern(command, pattern))) {
         return { decision: 'allow', reason: 'Command is allowed by configuration' }
       }
-    } else if (this.temporaryAllowlist.some((entry) => entry.tool === tool.name && !entry.command)) {
+    } else if (this.isTemporarilyAllowed((entry) => entry.tool === tool.name && !entry.command)) {
       return { decision: 'allow', reason: 'Allowed by active skill' }
     }
 
@@ -119,5 +124,9 @@ export class PermissionManager {
       decision,
       reason: decision === 'allow' ? 'Tool does not require permission' : 'Tool requires confirmation',
     }
+  }
+
+  private isTemporarilyAllowed(predicate: (entry: SkillAllowedTool) => boolean): boolean {
+    return this.temporaryAllowlistStack.some((allowlist) => allowlist.some(predicate))
   }
 }

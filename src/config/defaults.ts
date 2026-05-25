@@ -9,6 +9,7 @@ export const DEFAULT_CONFIG: DsCodeConfig = {
   timeout: 120_000,
   permissions: {
     allowedCommands: [],
+    allowedTools: [],
     allowAllCommands: false,
   },
   skills: {

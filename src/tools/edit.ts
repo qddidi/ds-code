@@ -66,6 +66,67 @@ export const editTool: Tool = {
       ? content.split(oldString).length - 1
       : 1
 
-    return { content: `Replaced ${count} occurrence(s) in ${filePath}` }
+    return { content: `Replaced ${count} occurrence(s) in ${filePath}\n\n${createUnifiedDiff(filePath, content, updated)}` }
   },
+}
+
+function createUnifiedDiff(filePath: string, before: string, after: string): string {
+  const beforeLines = splitLines(before)
+  const afterLines = splitLines(after)
+  const start = findFirstChangedLine(beforeLines, afterLines)
+  if (start === -1) return `--- ${filePath}\n+++ ${filePath}`
+
+  const endBefore = findLastChangedLine(beforeLines, afterLines, start)
+  const endAfter = findLastChangedLine(afterLines, beforeLines, start)
+  const contextStart = Math.max(0, start - 3)
+  const contextEndBefore = Math.min(beforeLines.length - 1, endBefore + 3)
+  const contextEndAfter = Math.min(afterLines.length - 1, endAfter + 3)
+  const beforeCount = contextEndBefore - contextStart + 1
+  const afterCount = contextEndAfter - contextStart + 1
+  const lines = [
+    `--- ${filePath}`,
+    `+++ ${filePath}`,
+    `@@ -${contextStart + 1},${beforeCount} +${contextStart + 1},${afterCount} @@`,
+  ]
+
+  for (let i = contextStart; i < start; i++) {
+    lines.push(` ${beforeLines[i] ?? ''}`)
+  }
+  for (let i = start; i <= contextEndBefore; i++) {
+    if (i <= endBefore) lines.push(`-${beforeLines[i] ?? ''}`)
+  }
+  for (let i = start; i <= contextEndAfter; i++) {
+    if (i <= endAfter) lines.push(`+${afterLines[i] ?? ''}`)
+  }
+  const trailingContextStart = Math.max(endBefore, endAfter) + 1
+  const trailingContextEnd = Math.min(beforeLines.length - 1, afterLines.length - 1, trailingContextStart + 2)
+  for (let i = trailingContextStart; i <= trailingContextEnd; i++) {
+    if (beforeLines[i] === afterLines[i]) lines.push(` ${beforeLines[i] ?? ''}`)
+  }
+
+  return lines.join('\n')
+}
+
+function splitLines(content: string): string[] {
+  const lines = content.split('\n')
+  if (lines.at(-1) === '') lines.pop()
+  return lines
+}
+
+function findFirstChangedLine(beforeLines: string[], afterLines: string[]): number {
+  const length = Math.max(beforeLines.length, afterLines.length)
+  for (let i = 0; i < length; i++) {
+    if (beforeLines[i] !== afterLines[i]) return i
+  }
+  return -1
+}
+
+function findLastChangedLine(primary: string[], secondary: string[], start: number): number {
+  let primaryIndex = primary.length - 1
+  let secondaryIndex = secondary.length - 1
+  while (primaryIndex >= start && secondaryIndex >= start && primary[primaryIndex] === secondary[secondaryIndex]) {
+    primaryIndex--
+    secondaryIndex--
+  }
+  return Math.max(start, primaryIndex)
 }

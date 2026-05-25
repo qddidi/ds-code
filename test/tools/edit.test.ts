@@ -26,6 +26,9 @@ describe('edit_file tool', () => {
     })
 
     expect(result.isError).toBeUndefined()
+    expect(result.content).toContain('--- ')
+    expect(result.content).toContain('-const x = 1')
+    expect(result.content).toContain('+const x = 42')
     const content = await readFile(filePath, 'utf-8')
     expect(content).toBe('const x = 42\nconst y = 2\n')
   })

@@ -47,7 +47,9 @@ ${projectInstructions}You have tools to read, write, edit, list, search files, a
 
 When editing an existing file, prefer edit over shell commands. Before calling edit, read the file and copy old_string exactly from the current file content, including indentation, spaces, and line endings. Make old_string unique unless every match should be replaced with replace_all=true.
 
-IMPORTANT: When working on a task, complete it fully before responding. Do not stop in the middle to give progress updates. Keep using tools until the task is done, then provide a final summary.`
+IMPORTANT: When working on a task, complete it fully before responding. Do not stop in the middle to give progress updates. Keep using tools until the task is done, then provide a final summary.
+
+Temporary scripts or scratch files created for task execution must be placed under ${options.cwd}/.ds-code/scripts/ instead of the workspace root. Before writing or running non-Node scripts, first check that the required runtime exists on the user's machine with the bash tool.`
 }
 
 export function serializeMessages(messages: ChatMessage[]): ChatMessage[] {

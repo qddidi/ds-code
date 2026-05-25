@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { DEFAULT_CONFIG } from '../../src/config/defaults.js'
-import { ConfigError, loadAgentInstructions, loadConfig, mergeConfig, readConfigFile, rememberAllowedCommand, validateConfig } from '../../src/config/loader.js'
+import { ConfigError, loadAgentInstructions, loadConfig, mergeConfig, readConfigFile, rememberAllowedCommand, rememberAllowedTool, validateConfig } from '../../src/config/loader.js'
 
 describe('config loader', () => {
   let tempDir: string
@@ -116,6 +116,17 @@ describe('config loader', () => {
     const config = JSON.parse(content) as { permissions: { allowedCommands: string[] } }
 
     expect(config.permissions.allowedCommands).toEqual(['git status', 'pnpm test'])
+  })
+
+  it('persists remembered allowed tools to project settings', async () => {
+    await rememberAllowedTool('write_file', { projectDir })
+    await rememberAllowedTool('edit_file', { projectDir })
+    await rememberAllowedTool('write_file', { projectDir })
+
+    const content = await readFile(join(projectDir, '.ds-code', 'settings.json'), 'utf-8')
+    const config = JSON.parse(content) as { permissions: { allowedTools: string[] } }
+
+    expect(config.permissions.allowedTools).toEqual(['write_file', 'edit_file'])
   })
 
   it('loads nearest AGENTS.md from project ancestors', async () => {

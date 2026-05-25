@@ -176,8 +176,8 @@ function toolResultSummary(name: string, result: string, isError: boolean): stri
 
   switch (name) {
     case 'write_file': {
-      const lines = result.match(/wrote (\d+) bytes/i)
-      return lines ? lines[0] : ''
+      const lines = result.match(/(?:wrote|written: .*?\()\s*(\d+) bytes/i)
+      return lines ? `${lines[1]} bytes` : ''
     }
     case 'bash': {
       const exitMatch = result.match(/exitCode=(\d+|null)/)

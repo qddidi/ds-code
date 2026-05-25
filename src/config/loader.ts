@@ -55,6 +55,26 @@ export async function rememberAllowedCommand(command: string, options: LoadConfi
   await writeFile(projectPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf-8')
 }
 
+export async function rememberAllowedTool(tool: string, options: LoadConfigOptions = {}): Promise<void> {
+  const projectDir = options.projectDir ? resolve(options.projectDir) : process.cwd()
+  const projectPath = join(projectDir, '.ds-code', 'settings.json')
+  const projectConfig = await readConfigFile(projectPath)
+  const existingTools = projectConfig.permissions?.allowedTools ?? []
+
+  if (existingTools.includes(tool)) return
+
+  const updated: PartialDsCodeConfig = {
+    ...projectConfig,
+    permissions: {
+      ...projectConfig.permissions,
+      allowedTools: [...existingTools, tool],
+    },
+  }
+
+  await mkdir(join(projectDir, '.ds-code'), { recursive: true })
+  await writeFile(projectPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf-8')
+}
+
 export async function loadAgentInstructions(projectDir = process.cwd()): Promise<string> {
   const filePath = await findUp('AGENTS.md', resolve(projectDir))
   if (!filePath) return ''
@@ -127,6 +147,14 @@ export function validateConfig(config: DsCodeConfig): DsCodeConfig {
     throw new ConfigError('Invalid config field "permissions.allowedCommands": expected string array')
   }
 
+  if (!Array.isArray(config.permissions.allowedTools)) {
+    throw new ConfigError('Invalid config field "permissions.allowedTools": expected array')
+  }
+
+  if (config.permissions.allowedTools.some((tool) => typeof tool !== 'string')) {
+    throw new ConfigError('Invalid config field "permissions.allowedTools": expected string array')
+  }
+
   if (typeof config.permissions.allowAllCommands !== 'boolean') {
     throw new ConfigError('Invalid config field "permissions.allowAllCommands": expected boolean')
   }
@@ -185,6 +213,7 @@ function pickPermissionFields(permissions: PartialDsCodeConfig['permissions']): 
   const result: Partial<DsCodeConfig['permissions']> = {}
   if (!permissions) return result
   if ('allowedCommands' in permissions) result.allowedCommands = permissions.allowedCommands
+  if ('allowedTools' in permissions) result.allowedTools = permissions.allowedTools
   if ('allowAllCommands' in permissions) result.allowAllCommands = permissions.allowAllCommands
   return result
 }

@@ -25,6 +25,7 @@ export const writeTool: Tool = {
     await mkdir(dir, { recursive: true })
     await writeFile(filePath, content, 'utf-8')
 
-    return { content: `File written: ${filePath}` }
+    const bytes = Buffer.byteLength(content, 'utf-8')
+    return { content: `File written: ${filePath} (${bytes} bytes)` }
   },
 }

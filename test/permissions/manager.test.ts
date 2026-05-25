@@ -139,4 +139,32 @@ describe('PermissionManager', () => {
 
     expect(confirm).not.toHaveBeenCalled()
   })
+
+  it('restores temporary skill tools after nested scopes throw', async () => {
+    const confirm = vi.fn(async () => 'allow_once' as const)
+    const manager = new PermissionManager({ confirm })
+
+    await expect(manager.withTemporaryAllowlist([{ tool: 'write_file' }], async () => {
+      await manager.withTemporaryAllowlist([{ tool: 'edit_file' }], async () => {
+        await expect(manager.check(writeTool, { file_path: 'a.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+        await expect(manager.check(editTool, { file_path: 'a.ts', old_string: 'x', new_string: 'y' })).resolves.toMatchObject({ decision: 'allow' })
+        throw new Error('stop')
+      })
+    })).rejects.toThrow('stop')
+
+    await expect(manager.check(writeTool, { file_path: 'b.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads and persists allow always responses for non-bash tools', async () => {
+    const rememberTool = vi.fn(async () => {})
+    const confirm = vi.fn(async () => 'allow_always' as const)
+    const manager = new PermissionManager({ allowedTools: ['edit_file'], confirm, rememberTool })
+
+    await expect(manager.check(editTool, { file_path: 'a.ts', old_string: 'x', new_string: 'y' })).resolves.toMatchObject({ decision: 'allow' })
+    await expect(manager.check(writeTool, { file_path: 'a.ts', content: 'x' })).resolves.toMatchObject({ decision: 'allow' })
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(rememberTool).toHaveBeenCalledWith('write_file')
+  })
 })

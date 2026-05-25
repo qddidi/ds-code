@@ -22,6 +22,7 @@ describe('write_file tool', () => {
 
     expect(result.isError).toBeUndefined()
     expect(result.content).toContain('File written')
+    expect(result.content).toContain('11 bytes')
     const written = await readFile(filePath, 'utf-8')
     expect(written).toBe('hello world')
   })

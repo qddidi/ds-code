@@ -7,6 +7,7 @@ import {
   renderAfterTool,
   toolCallSpinnerText,
   renderToolCall,
+  renderToolResult,
 } from '../../src/cli/output.js'
 
 describe('renderMarkdown', () => {
@@ -81,5 +82,11 @@ describe('human-friendly progress messages', () => {
     const output = renderToolCall('list_dir', '{"path":"D:/ds"}')
     expect(output).toContain('List')
     expect(output).toContain('D:/ds')
+  })
+
+  it('renders write_file byte result summary', () => {
+    const output = renderToolResult('write_file', false, 'File written: D:/ds/a.txt (12 bytes)')
+    expect(output).toContain('write_file')
+    expect(output).toContain('12 bytes')
   })
 })

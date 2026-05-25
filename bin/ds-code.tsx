@@ -55,6 +55,7 @@ render(
     ...(options.model ? { model: options.model } : {}),
     ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
     allowedCommands: options.allowedCommands,
+    allowedTools: options.allowedTools,
     allowAllCommands: options.allowAllCommands,
     skillsEnabled: options.skillsEnabled,
     skillsAutoMatch: options.skillsAutoMatch,
