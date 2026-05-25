@@ -25,6 +25,10 @@ export class ToolRegistry {
     return [...this.tools.values()]
   }
 
+  isReadOnly(name: string): boolean {
+    return this.tools.get(name)?.requiresPermission === false
+  }
+
   toToolDefinitions(): ToolDefinition[] {
     return this.list().map((tool) => ({
       type: 'function',
@@ -63,7 +67,10 @@ export class ToolRegistry {
         return { content: `Permission denied: ${permResult.reason}`, isError: true }
       }
       if (permResult.decision === 'confirm') {
-        return { content: `Permission denied: ${permResult.reason}`, isError: true }
+        return {
+          content: `Permission requires confirmation but no confirm callback is set: ${permResult.reason}`,
+          isError: true,
+        }
       }
     }
 

@@ -142,13 +142,13 @@ ds-code
 ds-code "帮我看看这个项目的结构"
 
 # 指定模型
- ds-code --model reasoner
+ds-code --model reasoner
 
 # 使用 OpenAI
- ds-code --provider openai --model gpt-4o
+ds-code --provider openai --model gpt-4o
 
 # 使用 OpenAI-compatible 中转站
- ds-code --provider custom --base-url https://relay.example.com --model openai/gpt-4o
+ds-code --provider custom --base-url https://relay.example.com --model openai/gpt-4o
 
 # 恢复上次会话
 ds-code --resume

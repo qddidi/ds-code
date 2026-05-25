@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
+import { assertSafeWritablePathForTool } from './path-safety.js'
 
 export const editTool: Tool = {
   name: 'edit_file',
@@ -22,7 +22,12 @@ export const editTool: Tool = {
   requiresPermission: true,
 
   async execute(params: Record<string, unknown>): Promise<ToolResult> {
-    const filePath = resolve(params.file_path as string)
+    const safety = assertSafeWritablePathForTool(params.file_path as string)
+    if (!safety.ok) {
+      return { content: safety.reason ?? `Refusing to edit unsafe path: ${safety.path}`, isError: true }
+    }
+
+    const filePath = safety.path
     const oldString = params.old_string as string
     const newString = params.new_string as string
     const replaceAll = (params.replace_all as boolean) || false

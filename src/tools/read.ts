@@ -1,16 +1,9 @@
 import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { isBinaryBuffer } from '../utils/binary.js'
 import type { Tool, ToolResult } from './types.js'
 
 const MAX_LINES = 2000
-
-function isBinaryBuffer(buffer: Buffer): boolean {
-  const checkLength = Math.min(buffer.length, 8192)
-  for (let i = 0; i < checkLength; i++) {
-    if (buffer[i] === 0) return true
-  }
-  return false
-}
 
 function formatWithLineNumbers(lines: string[], startLine: number): string {
   return lines

@@ -177,6 +177,41 @@ describe('Agent', () => {
     expect(toolMessages[1]!.tool_call_id).toBe('c2')
   })
 
+  it('executes tools marked read-only by metadata in parallel', async () => {
+    const client = createMockClient([
+      toolCallMessage([
+        { name: 'custom_read_a', args: '{"text":"a"}', id: 'c1' },
+        { name: 'custom_read_b', args: '{"text":"b"}', id: 'c2' },
+      ]),
+      textMessage('Both done'),
+    ])
+    const registry = new ToolRegistry()
+    const finishOrder: string[] = []
+    registry.register({
+      ...createEchoTool('custom_read_a'),
+      execute: async (params) => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        finishOrder.push('custom_read_a')
+        return { content: `echo: ${params['text']}` }
+      },
+    })
+    registry.register({
+      ...createEchoTool('custom_read_b'),
+      execute: async (params) => {
+        finishOrder.push('custom_read_b')
+        return { content: `echo: ${params['text']}` }
+      },
+    })
+    const agent = new Agent(client, registry)
+
+    const result = await agent.run('parallel custom read-only tools')
+
+    expect(result).toBe('Both done')
+    expect(finishOrder).toEqual(['custom_read_b', 'custom_read_a'])
+    const toolMessages = agent.getMessages().filter((m) => m.role === 'tool')
+    expect(toolMessages.map((m) => m.tool_call_id)).toEqual(['c1', 'c2'])
+  })
+
   it('stops at maxIterations and returns error', async () => {
     const infiniteToolCalls = Array.from({ length: 5 }, () =>
       toolCallMessage([{ name: 'echo', args: '{"text":"loop"}' }]),
@@ -191,6 +226,24 @@ describe('Agent', () => {
 
     expect(result).toContain('Exceeded maximum iterations')
     expect(onMaxIterations).toHaveBeenCalled()
+  })
+
+  it('uses unlimited tool-call iterations by default', async () => {
+    const responses = Array.from({ length: 60 }, (_, index) =>
+      toolCallMessage([{ name: 'echo', args: `{"text":"loop-${index}"}` }]),
+    )
+    responses.push(textMessage('Done'))
+    const client = createMockClient(responses)
+    const registry = new ToolRegistry()
+    registry.register(createEchoTool())
+    const agent = new Agent(client, registry)
+
+    const onMaxIterations = vi.fn()
+    const result = await agent.run('keep going', { onMaxIterations })
+
+    expect(result).toBe('Done')
+    expect(onMaxIterations).not.toHaveBeenCalled()
+    expect(vi.mocked(client.chatStream)).toHaveBeenCalledTimes(61)
   })
 
   it('handles tool execution failure gracefully', async () => {

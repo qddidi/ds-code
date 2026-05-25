@@ -5,7 +5,7 @@ import { systemMessage, userMessage, assistantMessage, toolResultMessage } from 
 
 export interface AgentConfig {
   systemPrompt: string
-  maxIterations: number
+  maxIterations: number | null
   maxContextTokens: number
 }
 
@@ -21,7 +21,7 @@ export interface AgentCallbacks {
 
 const DEFAULT_CONFIG: AgentConfig = {
   systemPrompt: 'You are a helpful coding assistant.',
-  maxIterations: 50,
+  maxIterations: null,
   maxContextTokens: 64000,
 }
 
@@ -117,7 +117,7 @@ export class Agent {
 
     let iterations = 0
 
-    while (iterations < this.config.maxIterations) {
+    while (this.config.maxIterations === null || iterations < this.config.maxIterations) {
       if (signal?.aborted) {
         return ''
       }
@@ -169,7 +169,7 @@ export class Agent {
     callbacks: AgentCallbacks,
     signal?: AbortSignal,
   ): Promise<ChatMessage[]> {
-    if (toolCalls.every((toolCall) => isReadOnlyTool(toolCall.function.name))) {
+    if (toolCalls.every((toolCall) => this.registry.isReadOnly(toolCall.function.name))) {
       return Promise.all(toolCalls.map(async (toolCall) => {
         callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
         const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
@@ -188,10 +188,6 @@ export class Agent {
     }
     return results
   }
-}
-
-function isReadOnlyTool(name: string): boolean {
-  return name === 'read_file' || name === 'list_dir' || name === 'glob' || name === 'grep'
 }
 
 function formatMessagesForSummary(messages: ChatMessage[]): string {

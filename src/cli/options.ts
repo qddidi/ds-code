@@ -14,6 +14,7 @@ export interface CliOptions {
   skillsAutoMatchModel: boolean
   initialPrompt?: string
   resume: boolean
+  timeout: number
 }
 
 export function resolveCliOptions(args: string[], config: DsCodeConfig, env: NodeJS.ProcessEnv): CliOptions {
@@ -27,6 +28,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
   const skillsEnabled = config.skills.enabled
   const skillsAutoMatch = config.skills.autoMatch
   const skillsAutoMatchModel = config.skills.autoMatchModel
+  const timeout = config.timeout
   const resume = args.includes('--resume')
   const initialPrompt = readInitialPrompt(args)
 
@@ -43,6 +45,7 @@ export function resolveCliOptions(args: string[], config: DsCodeConfig, env: Nod
     skillsAutoMatchModel,
     ...(initialPrompt ? { initialPrompt } : {}),
     resume,
+    timeout,
   }
 }
 

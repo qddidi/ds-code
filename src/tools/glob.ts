@@ -1,8 +1,7 @@
 import fg from 'fast-glob'
 import { resolve } from 'node:path'
+import { DEFAULT_IGNORE } from './default-ignore.js'
 import type { Tool, ToolResult } from './types.js'
-
-const DEFAULT_IGNORE = ['**/node_modules/**', '**/.git/**']
 
 export const globTool: Tool = {
   name: 'glob',

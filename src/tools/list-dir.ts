@@ -1,5 +1,5 @@
-import { readdir, stat } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { readdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
 
 export const listDirTool: Tool = {
@@ -18,9 +18,9 @@ export const listDirTool: Tool = {
   async execute(params: Record<string, unknown>): Promise<ToolResult> {
     const dirPath = resolve(params.path as string)
 
-    let entries: string[]
+    let entries: Awaited<ReturnType<typeof readdir>>
     try {
-      entries = await readdir(dirPath)
+      entries = await readdir(dirPath, { withFileTypes: true })
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code
       if (code === 'ENOENT') {
@@ -39,18 +39,9 @@ export const listDirTool: Tool = {
       return { content: `${dirPath} (empty directory)` }
     }
 
-    entries.sort()
-
-    const lines: string[] = []
-    for (const entry of entries) {
-      const fullPath = join(dirPath, entry)
-      try {
-        const s = await stat(fullPath)
-        lines.push(s.isDirectory() ? `${entry}/` : entry)
-      } catch {
-        lines.push(entry)
-      }
-    }
+    const lines = entries
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((entry) => entry.isDirectory() ? `${entry.name}/` : entry.name)
 
     return { content: `${dirPath}\n${lines.join('\n')}` }
   },

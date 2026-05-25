@@ -181,7 +181,19 @@ describe('DeepSeekClient', () => {
       }
     })
 
-    it('throws NetworkError on timeout', async () => {
+    it('does not attach a timeout timer by default', async () => {
+      const fetchMock = mockFetchResponse(SAMPLE_RESPONSE)
+      globalThis.fetch = fetchMock
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
+      const client = new DeepSeekClient({ apiKey: 'sk-test' })
+      await client.chat([{ role: 'user', content: 'Hi' }])
+
+      expect(setTimeoutSpy).not.toHaveBeenCalled()
+      setTimeoutSpy.mockRestore()
+    })
+
+    it('throws NetworkError on timeout when timeout is configured', async () => {
       globalThis.fetch = vi.fn().mockImplementation(() => {
         const err = new Error('aborted')
         err.name = 'AbortError'

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { editTool } from '../../src/tools/edit.js'
 
@@ -9,9 +9,11 @@ describe('edit_file tool', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'ds-edit-'))
+    process.env.DS_CODE_WORKSPACE_ROOT = tempDir
   })
 
   afterEach(async () => {
+    delete process.env.DS_CODE_WORKSPACE_ROOT
     await rm(tempDir, { recursive: true })
   })
 
@@ -104,6 +106,17 @@ describe('edit_file tool', () => {
     expect(result.isError).toBeUndefined()
     const content = await readFile(filePath, 'utf-8')
     expect(content).toBe('  if (x) {\n    return 2\n  }\n')
+  })
+
+  it('rejects edits outside the current project directory', async () => {
+    const result = await editTool.execute({
+      file_path: resolve('..', 'outside-ds-code-edit-test.txt'),
+      old_string: 'old',
+      new_string: 'new',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('outside the current project directory')
   })
 
   it('requires permission', () => {

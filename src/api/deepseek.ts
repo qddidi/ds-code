@@ -23,7 +23,7 @@ const DEFAULT_CONFIG: ChatClientConfig = {
   model: 'deepseek-v4-pro',
   maxTokens: 16384,
   temperature: 0,
-  timeout: 60000,
+  timeout: 0,
 }
 
 export type DeepSeekModel = 'deepseek-v4-pro' | 'deepseek-v4-flash' | 'deepseek-reasoner'
@@ -232,12 +232,14 @@ export class DeepSeekClient {
   private async fetchRaw(body: ChatCompletionRequest, externalSignal?: AbortSignal): Promise<Response> {
     const url = `${this.config.baseUrl}/v1/chat/completions`
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+    const timeoutId = this.config.timeout > 0
+      ? setTimeout(() => controller.abort(), this.config.timeout)
+      : undefined
 
     const onExternalAbort = (): void => { controller.abort() }
     if (externalSignal) {
       if (externalSignal.aborted) {
-        clearTimeout(timeoutId)
+        if (timeoutId) clearTimeout(timeoutId)
         throw new NetworkError('Request aborted')
       }
       externalSignal.addEventListener('abort', onExternalAbort)
@@ -255,7 +257,7 @@ export class DeepSeekClient {
         signal: controller.signal,
       })
     } catch (err) {
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       externalSignal?.removeEventListener('abort', onExternalAbort)
       if (externalSignal?.aborted) {
         throw new NetworkError('Request aborted')
@@ -267,7 +269,7 @@ export class DeepSeekClient {
         err instanceof Error ? err.message : 'Network request failed',
       )
     } finally {
-      clearTimeout(timeoutId)
+      if (timeoutId) clearTimeout(timeoutId)
       externalSignal?.removeEventListener('abort', onExternalAbort)
     }
 

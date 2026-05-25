@@ -47,6 +47,7 @@ export interface AppProps {
   systemPrompt?: string
   initialPrompt?: string
   resume?: boolean
+  timeout?: number
 }
 
 type PermissionAnswer = 'yes' | 'always' | 'no'
@@ -77,7 +78,7 @@ function nextId(): string {
   return String(++msgId)
 }
 
-export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume }: AppProps): React.ReactElement {
+export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume, timeout }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
   const [messages, setMessages] = useState<DisplayMessage[]>([])
@@ -95,6 +96,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const [multiline, setMultiline] = useState(false)
   const [multilineBuffer, setMultilineBuffer] = useState<string[]>([])
   const [ready, setReady] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
   const [commandOutput, setCommandOutput] = useState('')
   const [modelPicker, setModelPicker] = useState(false)
   const [modelPickerIdx, setModelPickerIdx] = useState(0)
@@ -117,9 +119,10 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
   React.useEffect(() => {
     const init = async (): Promise<void> => {
-      const clientConfig: { provider: Provider; apiKey: string; model?: string; baseUrl?: string } = { provider, apiKey }
+      const clientConfig: { provider: Provider; apiKey: string; model?: string; baseUrl?: string; timeout?: number } = { provider, apiKey }
       if (model) clientConfig.model = model
       if (baseUrl) clientConfig.baseUrl = baseUrl
+      if (timeout !== undefined) clientConfig.timeout = timeout
       const client = new DeepSeekClient(clientConfig)
 
       const cwd = process.cwd()
@@ -190,7 +193,10 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         await runAgent(initialPrompt)
       }
     }
-    init().catch(() => {})
+    init().catch((err: unknown) => {
+      setInitError(formatInitError(err))
+      setReady(false)
+    })
   }, [])
 
   useInput((input, key) => {
@@ -735,6 +741,16 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   }
 
   if (!ready) {
+    if (initError) {
+      return (
+        <Box flexDirection="column">
+          <Text bold color="red">Failed to start {NAME}</Text>
+          <Text color="red">{initError}</Text>
+          <Text dimColor>Run /doctor after fixing the issue, or check your API key, config files, and skill metadata.</Text>
+        </Box>
+      )
+    }
+
     return (
       <Box>
         <Text dimColor>Starting {NAME}...</Text>
@@ -845,4 +861,9 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       </Box>
     </Box>
   )
+}
+
+export function formatInitError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  return String(err)
 }

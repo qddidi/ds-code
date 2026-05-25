@@ -6,7 +6,7 @@ export const DEFAULT_CONFIG: DsCodeConfig = {
   model: 'deepseek-v4-pro',
   maxTokens: 4096,
   temperature: 0.2,
-  timeout: 120_000,
+  timeout: 0,
   permissions: {
     allowedCommands: [],
     allowedTools: [],

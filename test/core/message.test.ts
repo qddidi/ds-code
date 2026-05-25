@@ -5,7 +5,6 @@ import {
   assistantMessage,
   toolResultMessage,
   defaultSystemPrompt,
-  serializeMessages,
 } from '../../src/core/message.js'
 
 describe('message builders', () => {
@@ -71,37 +70,5 @@ describe('defaultSystemPrompt', () => {
 
     expect(prompt).not.toContain('Project instructions from AGENTS.md')
     expect(prompt).toContain('Working directory: /repo')
-  })
-})
-
-describe('serializeMessages', () => {
-  it('serializes all message types correctly', () => {
-    const messages = [
-      systemMessage('system prompt'),
-      userMessage('hi'),
-      assistantMessage(null, [
-        { id: 'c1', type: 'function', function: { name: 'read', arguments: '{}' } },
-      ], '需要读取文件'),
-      toolResultMessage('c1', 'result'),
-      assistantMessage('done'),
-    ]
-
-    const serialized = serializeMessages(messages)
-
-    expect(serialized[0]).toEqual({ role: 'system', content: 'system prompt' })
-    expect(serialized[1]).toEqual({ role: 'user', content: 'hi' })
-    expect(serialized[2]!.role).toBe('assistant')
-    expect(serialized[2]!.content).toBeNull()
-    expect(serialized[2]!.tool_calls).toHaveLength(1)
-    expect(serialized[2]!.reasoning_content).toBe('需要读取文件')
-    expect(serialized[3]!.tool_call_id).toBe('c1')
-    expect(serialized[4]).toEqual({ role: 'assistant', content: 'done' })
-  })
-
-  it('omits tool_calls and tool_call_id when not present', () => {
-    const serialized = serializeMessages([userMessage('test')])
-    expect(serialized[0]).toEqual({ role: 'user', content: 'test' })
-    expect('tool_calls' in serialized[0]!).toBe(false)
-    expect('tool_call_id' in serialized[0]!).toBe(false)
   })
 })

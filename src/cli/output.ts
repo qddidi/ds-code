@@ -14,6 +14,50 @@ export function renderMarkdown(text: string): string {
   return text
 }
 
+export function renderStreamingMarkdown(text: string): string {
+  const split = splitCompletedStreamingMarkdown(text)
+  if (!split.completed) {
+    return split.pending
+  }
+
+  const rendered = renderMarkdown(split.completed)
+  if (!split.pending) {
+    return rendered
+  }
+
+  return `${rendered}\n${split.pending}`
+}
+
+function splitCompletedStreamingMarkdown(text: string): { completed: string, pending: string } {
+  const lines = text.split('\n')
+  let inFence = false
+  let lastCompleteLine = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ''
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence
+      if (!inFence) {
+        lastCompleteLine = i
+      }
+      continue
+    }
+
+    if (!inFence && line.trim() === '') {
+      lastCompleteLine = i
+    }
+  }
+
+  if (lastCompleteLine < 0) {
+    return { completed: '', pending: text }
+  }
+
+  return {
+    completed: lines.slice(0, lastCompleteLine + 1).join('\n').trimEnd(),
+    pending: lines.slice(lastCompleteLine + 1).join('\n'),
+  }
+}
+
 export function renderThinking(): string {
   return '正在分析你的请求...'
 }

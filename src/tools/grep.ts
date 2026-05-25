@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import fg from 'fast-glob'
 import { resolve } from 'node:path'
+import { isBinaryBuffer } from '../utils/binary.js'
+import { DEFAULT_IGNORE } from './default-ignore.js'
 import type { Tool, ToolResult } from './types.js'
 
-const DEFAULT_IGNORE = ['**/node_modules/**', '**/.git/**']
 const MAX_RESULTS = 100
 
 interface MatchResult {
@@ -74,7 +75,7 @@ export const grepTool: Tool = {
       let content: string
       try {
         const buffer = await readFile(file)
-        if (isBinary(buffer)) continue
+        if (isBinaryBuffer(buffer)) continue
         content = buffer.toString('utf-8')
       } catch {
         continue
@@ -135,12 +136,4 @@ function formatMatches(matches: MatchResult[], hasContext: boolean): string {
   return matches
     .map((m) => `${m.file}:${m.line}\t${m.content}`)
     .join('\n')
-}
-
-function isBinary(buffer: Buffer): boolean {
-  const checkLength = Math.min(buffer.length, 8192)
-  for (let i = 0; i < checkLength; i++) {
-    if (buffer[i] === 0) return true
-  }
-  return false
 }

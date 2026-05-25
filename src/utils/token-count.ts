@@ -1,5 +1,7 @@
 import type { ChatMessage } from '../api/types.js'
 
+const CONSERVATIVE_TOKEN_MARGIN = 1.2
+
 export function estimateTokens(text: string): number {
   let count = 0
   let i = 0
@@ -33,7 +35,7 @@ export function estimateTokens(text: string): number {
     }
   }
 
-  return Math.ceil(count)
+  return Math.ceil(count * CONSERVATIVE_TOKEN_MARGIN)
 }
 
 export function estimateMessagesTokens(messages: ChatMessage[]): number {
@@ -55,7 +57,7 @@ export function estimateMessagesTokens(messages: ChatMessage[]): number {
       total += 1
     }
   }
-  // conversation overhead
+  // conversation overhead, including conservative margin for fixed structural tokens
   total += 3
-  return total
+  return Math.ceil(total * CONSERVATIVE_TOKEN_MARGIN)
 }

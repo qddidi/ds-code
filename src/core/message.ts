@@ -51,19 +51,3 @@ IMPORTANT: When working on a task, complete it fully before responding. Do not s
 
 Temporary scripts or scratch files created for task execution must be placed under ${options.cwd}/.ds-code/scripts/ instead of the workspace root. Before writing or running non-Node scripts, first check that the required runtime exists on the user's machine with the bash tool.`
 }
-
-export function serializeMessages(messages: ChatMessage[]): ChatMessage[] {
-  return messages.map((msg) => {
-    const serialized: ChatMessage = { role: msg.role, content: msg.content }
-    if (msg.reasoning_content !== undefined) {
-      serialized.reasoning_content = msg.reasoning_content
-    }
-    if (msg.tool_calls) {
-      serialized.tool_calls = msg.tool_calls
-    }
-    if (msg.tool_call_id) {
-      serialized.tool_call_id = msg.tool_call_id
-    }
-    return serialized
-  })
-}

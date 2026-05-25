@@ -1,5 +1,6 @@
 import React from 'react'
 import { Box, Text, useStdout } from 'ink'
+import { renderStreamingMarkdown } from '../output.js'
 
 interface StreamingTextProps {
   text: string
@@ -59,10 +60,12 @@ export function StreamingText({ text }: StreamingTextProps): React.ReactElement 
     rows: stdout?.rows,
   })
 
+  const renderedText = renderStreamingMarkdown(visible.text)
+
   return (
     <Box flexDirection="column">
       {visible.omittedRows > 0 && <Text dimColor>... ({visible.omittedRows} terminal rows above)</Text>}
-      <Text>{visible.text}<Text color="cyan">▊</Text></Text>
+      <Text>{renderedText}<Text color="cyan">▊</Text></Text>
     </Box>
   )
 }

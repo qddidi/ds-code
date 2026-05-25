@@ -66,6 +66,12 @@ describe('CLI options', () => {
     expect(options.skillsAutoMatchModel).toBe(false)
   })
 
+  it('passes timeout through to the app options', () => {
+    const options = resolveCliOptions([], { ...DEFAULT_CONFIG, timeout: 300_000 }, {})
+
+    expect(options.timeout).toBe(300_000)
+  })
+
   it('reads named options', () => {
     expect(readOption(['--model', 'pro'], '--model')).toBe('pro')
     expect(readOption(['--base-url', 'https://relay.example.com'], '--base-url')).toBe('https://relay.example.com')

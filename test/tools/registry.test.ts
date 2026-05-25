@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { PermissionManager } from '../../src/permissions/manager.js'
 import { ToolRegistry } from '../../src/tools/registry.js'
 import type { Tool } from '../../src/tools/types.js'
 
@@ -42,6 +43,16 @@ describe('ToolRegistry', () => {
   it('returns undefined for unknown tool', () => {
     const registry = new ToolRegistry()
     expect(registry.get('nonexistent')).toBeUndefined()
+  })
+
+  it('reports read-only tools from requiresPermission metadata', () => {
+    const registry = new ToolRegistry()
+    registry.register(createMockTool('readish', { requiresPermission: false }))
+    registry.register(createMockTool('writeish', { requiresPermission: true }))
+
+    expect(registry.isReadOnly('readish')).toBe(true)
+    expect(registry.isReadOnly('writeish')).toBe(false)
+    expect(registry.isReadOnly('missing')).toBe(false)
   })
 
   it('exports OpenAI-compatible tool definitions', () => {
@@ -119,5 +130,16 @@ describe('ToolRegistry', () => {
     const result = await registry.execute('failing', '{"path": "x"}')
     expect(result.isError).toBe(true)
     expect(result.content).toBe('disk full')
+  })
+
+  it('returns clear error when confirmation is required without a callback', async () => {
+    const registry = new ToolRegistry()
+    registry.register(createMockTool('write_file', { requiresPermission: true }))
+    registry.setPermissionManager(new PermissionManager())
+
+    const result = await registry.execute('write_file', '{"path":"x"}')
+
+    expect(result.isError).toBe(true)
+    expect(result.content).toContain('Permission requires confirmation but no confirm callback is set')
   })
 })

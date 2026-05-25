@@ -1,6 +1,7 @@
 import { writeFile, mkdir } from 'node:fs/promises'
-import { resolve, dirname } from 'node:path'
+import { dirname } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
+import { assertSafeWritablePathForTool } from './path-safety.js'
 
 export const writeTool: Tool = {
   name: 'write_file',
@@ -18,7 +19,12 @@ export const writeTool: Tool = {
   requiresPermission: true,
 
   async execute(params: Record<string, unknown>): Promise<ToolResult> {
-    const filePath = resolve(params.file_path as string)
+    const safety = assertSafeWritablePathForTool(params.file_path as string)
+    if (!safety.ok) {
+      return { content: safety.reason ?? `Refusing to write unsafe path: ${safety.path}`, isError: true }
+    }
+
+    const filePath = safety.path
     const content = params.content as string
 
     const dir = dirname(filePath)

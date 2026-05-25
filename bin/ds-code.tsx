@@ -60,6 +60,7 @@ render(
     skillsEnabled: options.skillsEnabled,
     skillsAutoMatch: options.skillsAutoMatch,
     skillsAutoMatchModel: options.skillsAutoMatchModel,
+    timeout: options.timeout,
     ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     resume: options.resume,
   }),

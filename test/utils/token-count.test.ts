@@ -35,6 +35,10 @@ describe('estimateTokens', () => {
     expect(count).toBeGreaterThan(5)
     expect(count).toBeLessThan(20)
   })
+
+  it('applies a conservative margin to ASCII estimates', () => {
+    expect(estimateTokens('abcd')).toBe(2)
+  })
 })
 
 describe('estimateMessagesTokens', () => {
