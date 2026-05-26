@@ -743,7 +743,11 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     const compressed = await agent.compressNow()
     if (compressed) {
       const tokens = estimateMessagesTokens(agent.getMessages())
-      setCommandOutput(`Context compressed. Tokens now: ${tokens}`)
+      const session = sessionRef.current
+      if (session) {
+        await sessionStoreRef.current.autosave(session, agent.getMessages())
+      }
+      setCommandOutput(`Context compressed and saved. Tokens now: ${tokens}`)
     } else {
       setCommandOutput('Not enough context to compress.')
     }

@@ -154,6 +154,7 @@ export class DeepSeekClient {
     for await (const event of parseSSEStream(response)) {
       if (event.type === 'error') {
         callbacks.onError?.(event.error)
+        if (content || reasoningContent || toolCalls.size > 0) break
         throw event.error
       }
 

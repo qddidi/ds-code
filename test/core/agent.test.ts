@@ -262,7 +262,25 @@ describe('Agent', () => {
     expect(onToolResult).toHaveBeenCalledWith('fail', 'tool crashed', true)
 
     const toolMsg = agent.getMessages().find((m) => m.role === 'tool')
-    expect(toolMsg?.content).toBe('tool crashed')
+    expect(toolMsg?.content).toBe('Tool error: tool crashed')
+  })
+
+  it('stops repeated identical tool errors without looping forever', async () => {
+    const client = createMockClient([
+      toolCallMessage([{ name: 'fail', args: '{"msg":"x"}', id: 'c1' }]),
+      toolCallMessage([{ name: 'fail', args: '{"msg":"x"}', id: 'c2' }]),
+      toolCallMessage([{ name: 'fail', args: '{"msg":"x"}', id: 'c3' }]),
+      textMessage('should not be reached'),
+    ])
+    const registry = new ToolRegistry()
+    registry.register(createFailingTool())
+    const agent = new Agent(client, registry)
+
+    const result = await agent.run('break it repeatedly')
+
+    expect(result).toContain('Tool error: tool crashed')
+    expect(result).toContain('Stopped after 3 repeated identical tool errors.')
+    expect(vi.mocked(client.chatStream)).toHaveBeenCalledTimes(3)
   })
 
   it('accumulates message history across multiple runs', async () => {

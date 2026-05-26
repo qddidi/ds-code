@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { bashTool } from '../../src/tools/bash.js'
@@ -76,6 +76,17 @@ describe('bash tool', () => {
 
     expect(result.isError).toBeUndefined()
     expect(result.content).toContain('hello; exit 9')
+    expect(result.content).toContain('exitCode=0')
+  })
+
+  it('does not re-execute shell warning lines from generated scripts', async () => {
+    const scriptPath = join(tempDir, 'loop.js')
+    await writeFile(scriptPath, "console.log('Unknown command: \"warn\"')", 'utf-8')
+
+    const result = await bashTool.execute({ command: `node ${JSON.stringify(scriptPath)}`, cwd: tempDir })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.content).toContain('Unknown command: \\\"warn\\\"')
     expect(result.content).toContain('exitCode=0')
   })
 })

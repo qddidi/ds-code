@@ -265,11 +265,9 @@ describe('DeepSeekClient', () => {
       expect(toolCalls).toHaveLength(1)
     })
 
-    it('calls onError when stream is interrupted', async () => {
-      const encoder = new TextEncoder()
+    it('calls onError when stream is interrupted before any response', async () => {
       const readable = new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"id":"1","object":"chat.completion.chunk","created":1,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\n'))
           controller.error(new Error('connection reset'))
         },
       })
@@ -291,6 +289,40 @@ describe('DeepSeekClient', () => {
         ),
       ).rejects.toThrow('connection reset')
 
+      expect(errors).toHaveLength(1)
+      expect(errors[0]!.message).toBe('connection reset')
+    })
+
+    it('returns partial content when stream is interrupted after content started', async () => {
+      const encoder = new TextEncoder()
+      let delivered = false
+      const readable = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!delivered) {
+            delivered = true
+            controller.enqueue(encoder.encode('data: {"id":"1","object":"chat.completion.chunk","created":1,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\n'))
+            return
+          }
+          controller.error(new Error('connection reset'))
+        },
+      })
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: readable,
+      } as unknown as Response)
+
+      const client = new DeepSeekClient({ apiKey: 'sk-test' })
+      const errors: Error[] = []
+
+      const message = await client.chatStream(
+        [{ role: 'user', content: 'Hi' }],
+        { onError: (err) => errors.push(err) },
+      )
+
+      expect(message.content).toBe('Hi')
       expect(errors).toHaveLength(1)
       expect(errors[0]!.message).toBe('connection reset')
     })

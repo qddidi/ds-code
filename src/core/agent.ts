@@ -7,6 +7,7 @@ export interface AgentConfig {
   systemPrompt: string
   maxIterations: number | null
   maxContextTokens: number
+  maxRepeatedToolErrors: number
 }
 
 export interface AgentCallbacks {
@@ -23,6 +24,7 @@ const DEFAULT_CONFIG: AgentConfig = {
   systemPrompt: 'You are a helpful coding assistant.',
   maxIterations: null,
   maxContextTokens: 64000,
+  maxRepeatedToolErrors: 3,
 }
 
 export interface ChatClient {
@@ -116,6 +118,7 @@ export class Agent {
     }
 
     let iterations = 0
+    const repeatedToolErrors = new Map<string, number>()
 
     while (this.config.maxIterations === null || iterations < this.config.maxIterations) {
       if (signal?.aborted) {
@@ -154,6 +157,10 @@ export class Agent {
         return ''
       }
 
+      if (this.shouldStopRepeatedToolErrors(toolResults, repeatedToolErrors)) {
+        return toolResults.at(-1)?.content ?? 'Error: Repeated tool failures.'
+      }
+
       for (const toolMsg of toolResults) {
         this.contextManager.addMessage(toolMsg)
       }
@@ -174,7 +181,7 @@ export class Agent {
         callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
         const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
         callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
-        return toolResultMessage(toolCall.id, result.content)
+        return toolResultMessage(toolCall.id, formatToolResultContent(result.content, result.isError ?? false))
       }))
     }
 
@@ -184,10 +191,31 @@ export class Agent {
       callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
       const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
       callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
-      results.push(toolResultMessage(toolCall.id, result.content))
+      results.push(toolResultMessage(toolCall.id, formatToolResultContent(result.content, result.isError ?? false)))
     }
     return results
   }
+
+  private shouldStopRepeatedToolErrors(toolResults: ChatMessage[], repeatedToolErrors: Map<string, number>): boolean {
+    let shouldStop = false
+    for (const toolMsg of toolResults) {
+      const content = toolMsg.content ?? ''
+      if (!content.startsWith('Tool error:')) continue
+      const key = content
+      const count = (repeatedToolErrors.get(key) ?? 0) + 1
+      repeatedToolErrors.set(key, count)
+      if (count >= this.config.maxRepeatedToolErrors) {
+        toolMsg.content = `${content}\nStopped after ${count} repeated identical tool errors.`
+        shouldStop = true
+      }
+    }
+    return shouldStop
+  }
+}
+
+function formatToolResultContent(content: string, isError: boolean): string {
+  if (!isError) return content
+  return `Tool error: ${content}`
 }
 
 function formatMessagesForSummary(messages: ChatMessage[]): string {
