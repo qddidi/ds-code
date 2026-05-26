@@ -28,7 +28,9 @@ describe('edit_file tool', () => {
     })
 
     expect(result.isError).toBeUndefined()
-    expect(result.content).toContain('--- ')
+    expect(result.content).toContain('diff --git')
+    expect(result.content).toContain('--- a/')
+    expect(result.content).toContain('+++ b/')
     expect(result.content).toContain('-const x = 1')
     expect(result.content).toContain('+const x = 42')
     const content = await readFile(filePath, 'utf-8')

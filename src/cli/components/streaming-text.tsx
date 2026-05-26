@@ -1,9 +1,10 @@
 import React from 'react'
 import { Box, Text, useStdout } from 'ink'
-import { renderStreamingMarkdown } from '../output.js'
+import { renderMarkdown, renderStreamingMarkdown } from '../output.js'
 
 interface StreamingTextProps {
   text: string
+  active?: boolean
 }
 
 interface StreamingViewport {
@@ -17,10 +18,22 @@ interface VisibleStreamingText {
   omittedRows: number
 }
 
+export function getRenderedStreamingText(text: string, active: boolean, viewport: StreamingViewport = {}): string {
+  if (!active) {
+    return renderMarkdown(text)
+  }
+
+  return renderStreamingMarkdown(getVisibleStreamingText(text, viewport).text)
+}
+
+export function getStreamingReservedRows(): number {
+  return 4
+}
+
 export function getVisibleStreamingText(text: string, viewport: StreamingViewport = {}): VisibleStreamingText {
   const columns = Math.max(1, viewport.columns ?? 80)
   const rows = Math.max(1, viewport.rows ?? 24)
-  const reservedRows = viewport.reservedRows ?? 6
+  const reservedRows = viewport.reservedRows ?? getStreamingReservedRows()
   const maxRows = Math.max(1, rows - reservedRows)
   const lines = text.split('\n')
 
@@ -53,19 +66,19 @@ export function getVisibleStreamingText(text: string, viewport: StreamingViewpor
   }
 }
 
-export function StreamingText({ text }: StreamingTextProps): React.ReactElement {
+export function StreamingText({ text, active = true }: StreamingTextProps): React.ReactElement {
   const { stdout } = useStdout()
-  const visible = getVisibleStreamingText(text, {
+  const visible = active ? getVisibleStreamingText(text, {
     columns: stdout?.columns,
     rows: stdout?.rows,
-  })
+  }) : { text, omittedRows: 0 }
 
-  const renderedText = renderStreamingMarkdown(visible.text)
+  const renderedText = getRenderedStreamingText(visible.text, active)
 
   return (
     <Box flexDirection="column">
       {visible.omittedRows > 0 && <Text dimColor>... ({visible.omittedRows} terminal rows above)</Text>}
-      <Text>{renderedText}<Text color="cyan">▊</Text></Text>
+      <Text>{renderedText}{active && <Text color="cyan">▊</Text>}</Text>
     </Box>
   )
 }

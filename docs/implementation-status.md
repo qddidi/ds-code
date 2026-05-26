@@ -9,7 +9,7 @@
 | 流式输出 | 已实现，SSE chunk 增量渲染 | `src/api/deepseek.ts`, `src/core/agent.ts`, `src/cli/app.tsx` |
 | Ctrl+C 中断 | 已实现，取消当前请求/工具执行 | `src/cli/app.tsx`, `src/api/deepseek.ts`, `src/tools/bash.ts` |
 | Agent 循环 | 已实现，支持工具调用循环与最大轮次限制 | `src/core/agent.ts` |
-| 工具系统 | 已实现 Read/Write/Edit/Glob/Grep/ListDir/Bash | `src/tools/` |
+| 工具系统 | 已实现 Read/Write/Edit/Glob/Grep/ListDir/Bash，Write/Edit 内容变化时返回 git 风格 diff | `src/tools/`, `src/utils/unified-diff.ts` |
 | 权限确认 | 已实现写入/执行确认，支持 always allow | `src/permissions/`, `src/cli/components/permission-prompt.tsx` |
 | 配置加载 | 已实现全局 + 项目配置合并 | `src/config/` |
 | 会话持久化 | 已实现自动保存与恢复 | `src/core/session.ts`, `src/cli/app.tsx` |

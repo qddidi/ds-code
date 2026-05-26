@@ -65,8 +65,8 @@ interface Tool {
 | 工具 | 功能 | 权限 |
 |------|------|------|
 | `read_file` | 读取文件，支持 offset/limit | 自动允许 |
-| `write_file` | 写入文件 | 需确认 |
-| `edit_file` | 精确字符串替换 | 需确认 |
+| `write_file` | 写入文件，内容变化时返回 git 风格 unified diff | 需确认 |
+| `edit_file` | 精确字符串替换，内容变化时返回 git 风格 unified diff | 需确认 |
 | `glob` | 文件名模式搜索 | 自动允许 |
 | `grep` | 内容正则搜索 | 自动允许 |
 | `list_dir` | 列目录 | 自动允许 |

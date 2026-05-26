@@ -25,6 +25,9 @@ describe('write_file tool', () => {
     expect(result.isError).toBeUndefined()
     expect(result.content).toContain('File written')
     expect(result.content).toContain('11 bytes')
+    expect(result.content).toContain('diff --git')
+    expect(result.content).toContain('--- /dev/null')
+    expect(result.content).toContain('+hello world')
     const written = await readFile(filePath, 'utf-8')
     expect(written).toBe('hello world')
   })
@@ -45,9 +48,22 @@ describe('write_file tool', () => {
 
     const result = await writeTool.execute({ file_path: filePath, content: 'new content' })
     expect(result.isError).toBeUndefined()
+    expect(result.content).toContain('diff --git')
+    expect(result.content).toContain('-old content')
+    expect(result.content).toContain('+new content')
 
     const written = await readFile(filePath, 'utf-8')
     expect(written).toBe('new content')
+  })
+
+  it('omits diff when overwriting with identical content', async () => {
+    const filePath = join(tempDir, 'same.txt')
+    await writeFile(filePath, 'same content', 'utf-8')
+
+    const result = await writeTool.execute({ file_path: filePath, content: 'same content' })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.content).not.toContain('diff --git')
   })
 
   it('rejects writes outside the current project directory', async () => {

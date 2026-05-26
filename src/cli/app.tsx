@@ -69,6 +69,7 @@ interface ToolEntry {
   args: Record<string, unknown>
   done: boolean
   error: boolean
+  result?: string
 }
 
 type Status = 'idle' | 'thinking' | 'streaming' | 'tool'
@@ -76,6 +77,18 @@ type Status = 'idle' | 'thinking' | 'streaming' | 'tool'
 let msgId = 0
 function nextId(): string {
   return String(++msgId)
+}
+
+function toolEntryMessage(entry: ToolEntry): DisplayMessage {
+  const prefix = `${entry.error ? '✗' : '✓'} ${entry.name}`
+  const content = shouldShowToolResult(entry)
+    ? `${prefix}\n${entry.result}`
+    : prefix
+  return { id: nextId(), role: 'tool', content }
+}
+
+function shouldShowToolResult(entry: ToolEntry): boolean {
+  return Boolean(entry.result && (entry.error || entry.name === 'write_file' || entry.name === 'edit_file'))
 }
 
 export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume, timeout }: AppProps): React.ReactElement {
@@ -468,7 +481,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               setToolHistory((h) => {
                 if (bufferRef.current === '' && h.length > 0) {
                   for (const t of h) {
-                    setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+                    setMessages((prev) => [...prev, toolEntryMessage(t)])
                   }
                   return []
                 }
@@ -482,19 +495,21 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
             },
             onToolCallStart: () => {
               if (bufferRef.current) {
-                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+                const content = bufferRef.current
                 bufferRef.current = ''
                 lastFlushedStreamingTextRef.current = ''
                 setStreamingText('')
+                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content }])
               }
               setStatus('thinking')
             },
             onToolCall: (name, args) => {
               if (bufferRef.current) {
-                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+                const content = bufferRef.current
                 bufferRef.current = ''
                 lastFlushedStreamingTextRef.current = ''
                 setStreamingText('')
+                setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content }])
               }
               setStatus('tool')
               let parsed: Record<string, unknown> = {}
@@ -502,10 +517,10 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               const entry: ToolEntry = { name, args: parsed, done: false, error: false }
               setCurrentTool(entry)
             },
-            onToolResult: (_name, _result, isError) => {
+            onToolResult: (_name, result, isError) => {
               setCurrentTool((prev) => {
                 if (prev) {
-                  const completed = { ...prev, done: true, error: isError ?? false }
+                  const completed = { ...prev, done: true, error: isError ?? false, result }
                   setToolHistory((h) => [...h, completed])
                 }
                 return null
@@ -527,12 +542,16 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       setToolHistory((h) => {
         for (const t of h) {
-          setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `${t.error ? '✗' : '✓'} ${t.name}` }])
+          setMessages((prev) => [...prev, toolEntryMessage(t)])
         }
         return []
       })
       if (bufferRef.current) {
-        setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content: bufferRef.current }])
+        const content = bufferRef.current
+        bufferRef.current = ''
+        lastFlushedStreamingTextRef.current = ''
+        setStreamingText('')
+        setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content }])
       }
 
       const session = sessionRef.current
@@ -551,7 +570,9 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       abortRef.current = null
       setStatus('idle')
       lastFlushedStreamingTextRef.current = ''
-      setStreamingText('')
+      if (bufferRef.current) {
+        setStreamingText(bufferRef.current)
+      }
       setCurrentTool(null)
     }
   }
@@ -760,9 +781,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
   return (
     <Box flexDirection="column">
-      <Text bold color="cyan">{NAME} <Text dimColor>v{VERSION}</Text></Text>
-      <Text dimColor>Type your message, /help for commands, Ctrl+D to exit</Text>
-      <Text> </Text>
+      {messages.length === 0 && <Header />}
 
       <MessageList messages={messages} />
 
@@ -779,7 +798,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       {status === 'thinking' && <StatusIndicator />}
       {status === 'tool' && currentTool && <ToolCallDisplay name={currentTool.name} args={currentTool.args} />}
-      {status === 'streaming' && streamingText && <StreamingText text={streamingText} />}
+      {shouldRenderStreamingText(streamingText, status) && <StreamingText text={streamingText} active />}
 
       {permReq && (
         <PermissionPrompt tool={permReq.tool} args={permReq.args} selectedIndex={permIdx} />
@@ -861,6 +880,20 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       </Box>
     </Box>
   )
+}
+
+function Header(): React.ReactElement {
+  return (
+    <Box flexDirection="column">
+      <Text bold color="cyan">{NAME} <Text dimColor>v{VERSION}</Text></Text>
+      <Text dimColor>Type your message, /help for commands, Ctrl+D to exit</Text>
+      <Text> </Text>
+    </Box>
+  )
+}
+
+export function shouldRenderStreamingText(streamingText: string, status: Status): boolean {
+  return streamingText.length > 0 && status === 'streaming'
 }
 
 export function formatInitError(err: unknown): string {
