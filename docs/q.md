@@ -13,7 +13,7 @@ Unknown command: "warn"
 
 To see a list of supported npm commands, run: 循环了
 
-3. 调用大模型接口报错会自动停止循环，不会继续回答了
+3. 调用大模型接口报错会自动停止循环，要求不要停止继续调用
 
 4. edit或者bash改了哪些内容，需要把diff及时展现啊，类似于git diff，实时展现不是全部完了一通展现
 

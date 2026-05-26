@@ -13,6 +13,7 @@ describe('permission rules', () => {
     expect(patternForAlwaysAllowedCommand('git commit -m "chore: update project"')).toBe('git commit -m *')
     expect(patternForAlwaysAllowedCommand('pnpm test -- --run')).toBe('pnpm test*')
     expect(patternForAlwaysAllowedCommand('npm run build -- --watch')).toBe('npm run build*')
+    expect(patternForAlwaysAllowedCommand('node -e "console.log(1)"')).toBe('node *')
     expect(patternForAlwaysAllowedCommand('ls src')).toBe('ls src')
   })
 })

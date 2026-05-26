@@ -64,11 +64,12 @@ interface SkillReq {
   resolve: (answer: SkillAnswer) => void
 }
 
-interface ToolEntry {
+export interface ToolEntry {
   name: string
   args: Record<string, unknown>
   done: boolean
   error: boolean
+  displayResult?: string
   result?: string
 }
 
@@ -81,14 +82,16 @@ function nextId(): string {
 
 function toolEntryMessage(entry: ToolEntry): DisplayMessage {
   const prefix = `${entry.error ? '✗' : '✓'} ${entry.name}`
-  const content = shouldShowToolResult(entry)
-    ? `${prefix}\n${entry.result}`
+  const shownResult = entry.displayResult ?? entry.result
+  const content = shownResult && shouldShowToolResult(entry)
+    ? shownResult
     : prefix
   return { id: nextId(), role: 'tool', content }
 }
 
-function shouldShowToolResult(entry: ToolEntry): boolean {
-  return Boolean(entry.result && (entry.error || entry.name === 'write_file' || entry.name === 'edit_file'))
+export function shouldShowToolResult(entry: ToolEntry): boolean {
+  if (entry.displayResult) return true
+  return Boolean(entry.result && entry.error)
 }
 
 export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume, timeout }: AppProps): React.ReactElement {
@@ -481,6 +484,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               setToolHistory((h) => {
                 if (bufferRef.current === '' && h.length > 0) {
                   for (const t of h) {
+                    if (shouldShowToolResult(t)) continue
                     setMessages((prev) => [...prev, toolEntryMessage(t)])
                   }
                   return []
@@ -517,14 +521,22 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
               const entry: ToolEntry = { name, args: parsed, done: false, error: false }
               setCurrentTool(entry)
             },
-            onToolResult: (_name, result, isError) => {
+            onToolResult: (_name, result, isError, displayContent) => {
               setCurrentTool((prev) => {
                 if (prev) {
-                  const completed = { ...prev, done: true, error: isError ?? false, result }
-                  setToolHistory((h) => [...h, completed])
+                  const completed = { ...prev, done: true, error: isError ?? false, result, displayResult: displayContent }
+                  if (shouldShowToolResult(completed)) {
+                    setMessages((messages) => [...messages, toolEntryMessage(completed)])
+                  } else {
+                    setToolHistory((h) => [...h, completed])
+                  }
                 }
                 return null
               })
+              setStatus('thinking')
+            },
+            onModelError: (error) => {
+              setMessages((prev) => [...prev, { id: nextId(), role: 'tool', content: `Model API error, retrying: ${error.message}` }])
               setStatus('thinking')
             },
             onMaxIterations: () => {
@@ -542,6 +554,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
 
       setToolHistory((h) => {
         for (const t of h) {
+          if (shouldShowToolResult(t)) continue
           setMessages((prev) => [...prev, toolEntryMessage(t)])
         }
         return []

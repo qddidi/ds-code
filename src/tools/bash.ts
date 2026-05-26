@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Tool, ToolResult } from './types.js'
+import { getGitDiff } from '../utils/git.js'
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const MAX_TIMEOUT_MS = 600_000
@@ -25,7 +26,15 @@ export const bashTool: Tool = {
     const cwd = params.cwd ? resolve(params.cwd as string) : process.cwd()
     const timeoutMs = normalizeTimeout(params.timeout_ms)
 
-    return executeCommand(command, cwd, timeoutMs, signal)
+    const beforeDiff = await getGitDiff(cwd)
+    const result = await executeCommand(command, cwd, timeoutMs, signal)
+    const afterDiff = await getGitDiff(cwd)
+
+    if (afterDiff.ok && afterDiff.output && afterDiff.output !== (beforeDiff.ok ? beforeDiff.output : '')) {
+      return { ...result, displayContent: afterDiff.output.trimEnd() }
+    }
+
+    return result
   },
 }
 

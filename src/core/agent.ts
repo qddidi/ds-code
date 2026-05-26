@@ -1,5 +1,5 @@
 import type { ChatMessage, ToolDefinition } from '../api/types.js'
-import type { ToolRegistry } from '../tools/registry.js'
+import type { ToolRegistry, ExecutedToolResult } from '../tools/registry.js'
 import { ContextManager } from './context.js'
 import { systemMessage, userMessage, assistantMessage, toolResultMessage } from './message.js'
 
@@ -15,7 +15,8 @@ export interface AgentCallbacks {
   onThinking?: (text: string) => void
   onToolCallStart?: () => void
   onToolCall?: (name: string, args: string) => void
-  onToolResult?: (name: string, result: string, isError: boolean) => void
+  onToolResult?: (name: string, result: string, isError: boolean, displayContent?: string) => void
+  onModelError?: (error: Error, attempt: number) => void
   onMaxIterations?: () => void
   onCompressing?: () => void
 }
@@ -127,16 +128,27 @@ export class Agent {
 
       iterations++
 
-      const message = await this.client.chatStream(
-        this.messages,
-        {
-          onContent: (chunk) => { callbacks.onContent?.(chunk) },
-          onThinking: (chunk) => { callbacks.onThinking?.(chunk) },
-          onToolCallStart: () => { callbacks.onToolCallStart?.() },
-        },
-        this.toolDefinitions,
-        signal,
-      )
+      let message: ChatMessage
+      try {
+        message = await this.client.chatStream(
+          this.messages,
+          {
+            onContent: (chunk) => { callbacks.onContent?.(chunk) },
+            onThinking: (chunk) => { callbacks.onThinking?.(chunk) },
+            onToolCallStart: () => { callbacks.onToolCallStart?.() },
+          },
+          this.toolDefinitions,
+          signal,
+        )
+      } catch (err) {
+        if (signal?.aborted) return ''
+        const error = err instanceof Error ? err : new Error(String(err))
+        callbacks.onModelError?.(error, iterations)
+        const retryMsg = userMessage(`[System: The previous model API call failed: ${error.message}. Continue from the last successful state and try again.]`)
+        this.messages.push(retryMsg)
+        this.contextManager.addMessage(retryMsg)
+        continue
+      }
 
       const assistantMsg = assistantMessage(message.content, message.tool_calls, message.reasoning_content)
       this.messages.push(assistantMsg)
@@ -180,7 +192,7 @@ export class Agent {
       return Promise.all(toolCalls.map(async (toolCall) => {
         callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
         const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
-        callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
+        callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false, getDisplayContent(result))
         return toolResultMessage(toolCall.id, formatToolResultContent(result.content, result.isError ?? false))
       }))
     }
@@ -190,7 +202,7 @@ export class Agent {
       if (signal?.aborted) return results
       callbacks.onToolCall?.(toolCall.function.name, toolCall.function.arguments)
       const result = await this.registry.execute(toolCall.function.name, toolCall.function.arguments, signal)
-      callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false)
+      callbacks.onToolResult?.(toolCall.function.name, result.content, result.isError ?? false, getDisplayContent(result))
       results.push(toolResultMessage(toolCall.id, formatToolResultContent(result.content, result.isError ?? false)))
     }
     return results
@@ -211,6 +223,10 @@ export class Agent {
     }
     return shouldStop
   }
+}
+
+function getDisplayContent(result: ExecutedToolResult): string | undefined {
+  return result.displayContent
 }
 
 function formatToolResultContent(content: string, isError: boolean): string {

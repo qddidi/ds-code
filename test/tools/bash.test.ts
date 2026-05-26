@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { bashTool } from '../../src/tools/bash.js'
+
+const execFileAsync = promisify(execFile)
 
 describe('bash tool', () => {
   let tempDir: string
@@ -77,6 +81,33 @@ describe('bash tool', () => {
     expect(result.isError).toBeUndefined()
     expect(result.content).toContain('hello; exit 9')
     expect(result.content).toContain('exitCode=0')
+  })
+
+  it('includes git diff when a command changes files', async () => {
+    await execFileAsync('git', ['init'], { cwd: tempDir })
+    await writeFile(join(tempDir, 'sample.txt'), 'before\n', 'utf-8')
+    await execFileAsync('git', ['add', 'sample.txt'], { cwd: tempDir })
+    await execFileAsync('git', ['commit', '-m', 'initial'], {
+      cwd: tempDir,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'Test',
+        GIT_AUTHOR_EMAIL: 'test@example.com',
+        GIT_COMMITTER_NAME: 'Test',
+        GIT_COMMITTER_EMAIL: 'test@example.com',
+      },
+    })
+
+    const result = await bashTool.execute({ command: "node -e \"require('fs').writeFileSync('sample.txt', 'after\\n')\"", cwd: tempDir })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.content).not.toContain('diff --git a/sample.txt b/sample.txt')
+    expect(result.content).toContain('exitCode=0')
+    expect(result.displayContent).toContain('diff --git a/sample.txt b/sample.txt')
+    expect(result.displayContent).toContain('-before')
+    expect(result.displayContent).toContain('+after')
+    expect(result.displayContent).not.toContain('stdout=')
+    expect(result.displayContent).not.toContain('exitCode=0')
   })
 
   it('does not re-execute shell warning lines from generated scripts', async () => {

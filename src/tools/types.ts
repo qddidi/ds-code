@@ -1,6 +1,7 @@
 export interface ToolResult {
   content: string
   isError?: boolean
+  displayContent?: string
 }
 
 export interface ToolParameters {

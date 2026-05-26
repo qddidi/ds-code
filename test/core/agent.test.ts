@@ -65,6 +65,19 @@ function createFailingTool(): Tool {
   }
 }
 
+function createDisplayTool(): Tool {
+  return {
+    name: 'display_edit',
+    description: 'Returns separate display content',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    requiresPermission: true,
+    execute: async () => ({ content: 'summary only', displayContent: 'diff --git a/file b/file' }),
+  }
+}
+
 describe('Agent', () => {
   it('returns text content from a simple response', async () => {
     const client = createMockClient([textMessage('Hello!')])
@@ -246,6 +259,43 @@ describe('Agent', () => {
     expect(vi.mocked(client.chatStream)).toHaveBeenCalledTimes(61)
   })
 
+  it('passes display content for non-read-only tool results', async () => {
+    const client = createMockClient([
+      toolCallMessage([{ name: 'display_edit', args: '{}', id: 'c1' }]),
+      textMessage('Done'),
+    ])
+    const registry = new ToolRegistry()
+    registry.register(createDisplayTool())
+    const agent = new Agent(client, registry)
+
+    const onToolResult = vi.fn()
+    await agent.run('edit', { onToolResult })
+
+    expect(onToolResult).toHaveBeenCalledWith('display_edit', 'summary only', false, 'diff --git a/file b/file')
+    const toolMsg = agent.getMessages().find((m) => m.role === 'tool')
+    expect(toolMsg?.content).toBe('summary only')
+  })
+
+  it('continues the loop after a model API call error', async () => {
+    const error = new Error('temporary outage')
+    const client = {
+      chatStream: vi.fn()
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce(textMessage('Recovered')),
+    } as unknown as DeepSeekClient
+    const registry = new ToolRegistry()
+    const agent = new Agent(client, registry, { maxIterations: 3 })
+
+    const onModelError = vi.fn()
+    const result = await agent.run('Hi', { onModelError })
+
+    expect(result).toBe('Recovered')
+    expect(onModelError).toHaveBeenCalledWith(error, 1)
+    expect(vi.mocked(client.chatStream)).toHaveBeenCalledTimes(2)
+    const messages = agent.getMessages()
+    expect(messages.some((m) => m.role === 'user' && m.content?.includes('previous model API call failed'))).toBe(true)
+  })
+
   it('handles tool execution failure gracefully', async () => {
     const client = createMockClient([
       toolCallMessage([{ name: 'fail', args: '{"msg":"x"}', id: 'c1' }]),
@@ -259,7 +309,7 @@ describe('Agent', () => {
     const result = await agent.run('break it', { onToolResult })
 
     expect(result).toBe('Handled error')
-    expect(onToolResult).toHaveBeenCalledWith('fail', 'tool crashed', true)
+    expect(onToolResult).toHaveBeenCalledWith('fail', 'tool crashed', true, undefined)
 
     const toolMsg = agent.getMessages().find((m) => m.role === 'tool')
     expect(toolMsg?.content).toBe('Tool error: tool crashed')

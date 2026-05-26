@@ -24,6 +24,7 @@ const ALWAYS_ALLOW_PREFIX_PATTERNS: Array<[RegExp, string]> = [
   [/^git\s+commit\s+-am\s+/, 'git commit -am *'],
   [/^pnpm\s+(test|build|lint|typecheck)\b/, 'pnpm $1*'],
   [/^npm\s+run\s+(test|build|lint|typecheck)\b/, 'npm run $1*'],
+  [/^node\s+/, 'node *'],
 ]
 
 export function defaultDecisionForTool(toolName: string, requiresPermission: boolean): PermissionDecision {

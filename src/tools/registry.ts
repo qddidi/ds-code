@@ -2,6 +2,10 @@ import type { ToolDefinition } from '../api/types.js'
 import type { Tool, ToolResult } from './types.js'
 import type { PermissionManager } from '../permissions/manager.js'
 
+export interface ExecutedToolResult extends ToolResult {
+  displayContent?: string
+}
+
 export class ToolRegistry {
   private tools = new Map<string, Tool>()
   private permissionManager: PermissionManager | null = null
@@ -44,7 +48,7 @@ export class ToolRegistry {
     this.permissionManager = manager
   }
 
-  async execute(name: string, argsJson: string, signal?: AbortSignal): Promise<ToolResult> {
+  async execute(name: string, argsJson: string, signal?: AbortSignal): Promise<ExecutedToolResult> {
     const tool = this.tools.get(name)
     if (!tool) {
       return { content: `Unknown tool: ${name}`, isError: true }

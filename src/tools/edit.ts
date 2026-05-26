@@ -72,6 +72,11 @@ export const editTool: Tool = {
       ? content.split(oldString).length - 1
       : 1
 
-    return { content: `Replaced ${count} occurrence(s) in ${filePath}\n\n${createUnifiedDiff(filePath, content, updated)}` }
+    const diff = createUnifiedDiff(filePath, content, updated)
+
+    return {
+      content: `Replaced ${count} occurrence(s) in ${filePath}`,
+      displayContent: diff || undefined,
+    }
   },
 }

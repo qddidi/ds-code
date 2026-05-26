@@ -37,8 +37,10 @@ export const writeTool: Tool = {
     const diff = existingContent === undefined
       ? createNewFileDiff(filePath, content)
       : createUnifiedDiff(filePath, existingContent, content)
-    const diffSuffix = diff.length > 0 ? `\n\n${diff}` : ''
-    return { content: `File written: ${filePath} (${bytes} bytes)${diffSuffix}` }
+    return {
+      content: `File written: ${filePath} (${bytes} bytes)`,
+      displayContent: diff || undefined,
+    }
   },
 }
 
