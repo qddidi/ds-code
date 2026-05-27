@@ -8,10 +8,11 @@ interface ToolCallDisplayProps {
   args: Record<string, unknown>
   done?: boolean
   error?: boolean
+  summary?: string
 }
 
-export function ToolCallDisplay({ name, args, done, error }: ToolCallDisplayProps): React.ReactElement {
-  const { label, detail } = formatTool(name, args)
+export function ToolCallDisplay({ name, args, done, error, summary }: ToolCallDisplayProps): React.ReactElement {
+  const { label, detail } = summary ? { label: summary, detail: '' } : formatTool(name, args)
   const icon = done
     ? (error ? <Text color="red">✗</Text> : <Text color="green">✓</Text>)
     : <Text color="cyan"><Spinner type="dots" /></Text>

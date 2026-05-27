@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Text, useStdout } from 'ink'
-import { renderMarkdown, renderStreamingMarkdown } from '../output.js'
+import { renderMarkdown } from '../output.js'
 
 interface StreamingTextProps {
   text: string
@@ -19,15 +19,15 @@ interface VisibleStreamingText {
 }
 
 export function getRenderedStreamingText(text: string, active: boolean, viewport: StreamingViewport = {}): string {
-  if (!active) {
-    return renderMarkdown(text)
+  if (active) {
+    return getVisibleStreamingText(text, viewport).text
   }
 
-  return renderStreamingMarkdown(getVisibleStreamingText(text, viewport).text)
+  return renderMarkdown(text)
 }
 
 export function getStreamingReservedRows(): number {
-  return 4
+  return 2
 }
 
 export function getVisibleStreamingText(text: string, viewport: StreamingViewport = {}): VisibleStreamingText {
@@ -61,22 +61,22 @@ export function getVisibleStreamingText(text: string, viewport: StreamingViewpor
   }
 
   return {
-    text: visibleLines.join('\n'),
+    text: visibleLines.join('\n').trimStart(),
     omittedRows: totalRows - maxRows,
   }
 }
 
 export function StreamingText({ text, active = true }: StreamingTextProps): React.ReactElement {
   const { stdout } = useStdout()
-  const visible = active ? getVisibleStreamingText(text, {
+  const viewport = {
     columns: stdout?.columns,
     rows: stdout?.rows,
-  }) : { text, omittedRows: 0 }
-
-  const renderedText = getRenderedStreamingText(visible.text, active)
+  }
+  const visible = active ? getVisibleStreamingText(text, viewport) : { text, omittedRows: 0 }
+  const renderedText = active ? visible.text : renderMarkdown(text)
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={active ? Math.max(1, (stdout?.rows ?? 24) - getStreamingReservedRows()) : undefined} overflow="hidden">
       {visible.omittedRows > 0 && <Text dimColor>... ({visible.omittedRows} terminal rows above)</Text>}
       <Text>{renderedText}{active && <Text color="cyan">▊</Text>}</Text>
     </Box>

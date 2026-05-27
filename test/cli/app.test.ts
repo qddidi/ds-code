@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatInitError, shouldRenderStreamingText, shouldShowToolResult } from '../../src/cli/app.js'
+import { formatInitError, shouldRenderStreamingText, shouldShowToolResult, summarizeToolWork } from '../../src/cli/app.js'
 
 describe('formatInitError', () => {
   it('uses Error message', () => {
@@ -25,6 +25,19 @@ describe('shouldShowToolResult', () => {
   it('hides successful results without display content', () => {
     expect(shouldShowToolResult({ name: 'bash', args: {}, done: true, error: false, result: 'stdout="ok"' })).toBe(false)
     expect(shouldShowToolResult({ name: 'edit_file', args: {}, done: true, error: false, result: 'Replaced 1 occurrence' })).toBe(false)
+    expect(shouldShowToolResult({ name: 'read_file', args: {}, done: true, error: false, result: 'file content' })).toBe(false)
+  })
+})
+
+describe('summarizeToolWork', () => {
+  it('groups read-only tools as problem location work', () => {
+    expect(summarizeToolWork('read_file')).toBe('定位问题')
+    expect(summarizeToolWork('grep')).toBe('定位问题')
+  })
+
+  it('groups update and verification tools', () => {
+    expect(summarizeToolWork('edit_file')).toBe('修复问题')
+    expect(summarizeToolWork('bash')).toBe('验证修复')
   })
 })
 
