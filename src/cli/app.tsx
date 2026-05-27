@@ -74,12 +74,6 @@ export interface ToolEntry {
 }
 
 type Status = 'idle' | 'thinking' | 'streaming' | 'tool'
-type WorkStepStatus = 'pending' | 'active' | 'done'
-
-interface WorkStep {
-  label: string
-  status: WorkStepStatus
-}
 
 let msgId = 0
 function nextId(): string {
@@ -96,47 +90,6 @@ export function shouldShowToolResult(entry: ToolEntry): boolean {
   return Boolean(entry.result && entry.error)
 }
 
-function createInitialWorkSteps(input: string): WorkStep[] {
-  return [
-    { label: input.trim() || '处理请求', status: 'active' },
-    { label: '定位问题', status: 'pending' },
-    { label: '修复问题', status: 'pending' },
-    { label: '验证修复', status: 'pending' },
-  ]
-}
-
-function activateWorkStep(steps: WorkStep[], label: string): WorkStep[] {
-  const existingIndex = steps.findIndex((step) => step.label === label)
-  const targetIndex = existingIndex >= 0 ? existingIndex : steps.length
-  const next = existingIndex >= 0 ? [...steps] : [...steps, { label, status: 'pending' as const }]
-  return next.map((step, index) => {
-    if (index < targetIndex) return { ...step, status: 'done' }
-    if (index === targetIndex) return { ...step, status: 'active' }
-    return { ...step, status: 'pending' }
-  })
-}
-
-function finishWorkSteps(steps: WorkStep[]): WorkStep[] {
-  return steps.map((step) => ({ ...step, status: 'done' }))
-}
-
-export function summarizeToolWork(name: string): string {
-  switch (name) {
-    case 'grep':
-    case 'glob':
-    case 'list_dir':
-    case 'read_file':
-      return '定位问题'
-    case 'edit_file':
-    case 'write_file':
-      return '修复问题'
-    case 'bash':
-      return '验证修复'
-    default:
-      return '处理工具调用'
-  }
-}
-
 export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedCommands = [], allowedTools = [], allowAllCommands = false, skillsEnabled = true, skillsAutoMatch = true, skillsAutoMatchModel = true, systemPrompt, initialPrompt, resume, timeout }: AppProps): React.ReactElement {
   const { exit } = useApp()
 
@@ -145,7 +98,6 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
   const [streamingText, setStreamingText] = useState('')
   const [currentTool, setCurrentTool] = useState<ToolEntry | null>(null)
   const [toolHistory, setToolHistory] = useState<ToolEntry[]>([])
-  const [workSteps, setWorkSteps] = useState<WorkStep[]>([])
   const [permReq, setPermReq] = useState<PermissionReq | null>(null)
   const [permIdx, setPermIdx] = useState(0)
   const [skillReq, setSkillReq] = useState<SkillReq | null>(null)
@@ -365,7 +317,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
         setSkillPicker([])
         setSkillPickerIdx(0)
         if (selected) {
-          setInputValue(`/${selected.name} `)
+          void requestSkillActivation({ metadata: selected, userArgs: inputValue.startsWith(`/${selected.name}`) ? inputValue.slice(selected.name.length + 1).trim() : '' })
         }
         return
       }
@@ -409,12 +361,25 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     setCommandOutput('')
 
     if (value.startsWith('/') && !value.includes(' ')) {
-      const m = matchSlashCommands(value)
-      setMatches(m)
+      const slashMatches = matchSlashCommands(value)
+      if (slashMatches.length > 0) {
+        setMatches(slashMatches)
+        setMatchIdx(0)
+        setSkillPicker([])
+        setSkillPickerIdx(0)
+        return
+      }
+
+      const skillMatches = (skillRegistryRef.current?.list() ?? []).filter((skill) => `/${skill.name}`.startsWith(value))
+      setMatches([])
       setMatchIdx(0)
+      setSkillPicker(skillMatches)
+      setSkillPickerIdx(0)
     } else {
       setMatches([])
       setMatchIdx(0)
+      setSkillPicker([])
+      setSkillPickerIdx(0)
     }
   }
 
@@ -445,6 +410,12 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     if (!text.trim()) return
 
     if (text.startsWith('/')) {
+      const parts = text.trim().split(/\s+/)
+      const skill = skillRegistryRef.current?.get(parts[0]?.slice(1) ?? '')
+      if (skill) {
+        await requestSkillActivation({ metadata: skill, userArgs: parts.slice(1).join(' ') })
+        return
+      }
       handleCommand(text)
       return
     }
@@ -507,7 +478,6 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
     setStreamingText('')
     lastFlushedStreamingTextRef.current = ''
     setToolHistory([])
-    setWorkSteps(createInitialWorkSteps(displayInput))
     bufferRef.current = ''
 
     const controller = new AbortController()
@@ -557,7 +527,6 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
                 setMessages((prev) => [...prev, { id: nextId(), role: 'assistant', content }])
               }
               setStatus('tool')
-              setWorkSteps((steps) => activateWorkStep(steps, summarizeToolWork(name)))
               let parsed: Record<string, unknown> = {}
               try { parsed = JSON.parse(args) as Record<string, unknown> } catch {}
               const entry: ToolEntry = { name, args: parsed, done: false, error: false }
@@ -629,7 +598,6 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       if (bufferRef.current) {
         setStreamingText(bufferRef.current)
       }
-      setWorkSteps((steps) => finishWorkSteps(steps))
       setCurrentTool(null)
     }
   }
@@ -855,8 +823,7 @@ export function App({ provider = 'deepseek', apiKey, model, baseUrl, allowedComm
       )}
 
       {status === 'thinking' && <StatusIndicator />}
-      {status === 'tool' && currentTool && <ToolCallDisplay name={currentTool.name} args={currentTool.args} summary={summarizeToolWork(currentTool.name)} />}
-      {status !== 'idle' && workSteps.length > 0 && <WorkStepList steps={workSteps} />}
+      {status === 'tool' && currentTool && <ToolCallDisplay name={currentTool.name} args={currentTool.args} />}
       {shouldRenderStreamingText(streamingText, status) && <StreamingText text={streamingText} active />}
 
       {permReq && (
@@ -947,17 +914,6 @@ function Header(): React.ReactElement {
       <Text bold color="cyan">{NAME} <Text dimColor>v{VERSION}</Text></Text>
       <Text dimColor>Type your message, /help for commands, Ctrl+D to exit</Text>
       <Text> </Text>
-    </Box>
-  )
-}
-
-function WorkStepList({ steps }: { steps: WorkStep[] }): React.ReactElement {
-  return (
-    <Box flexDirection="column">
-      {steps.map((step) => {
-        const icon = step.status === 'done' ? '✔' : step.status === 'active' ? '◼' : '◻'
-        return <Text key={step.label} dimColor={step.status === 'pending'}>  {icon} {step.label}</Text>
-      })}
     </Box>
   )
 }
